@@ -116,7 +116,9 @@ camera + frames ──(you stop talking)──▶ thinking (mic ignored) ──�
 - **The mic stream:** started once when the camera opens. Muting just ignores buffers.
   On **iOS** the stream is stopped while Gem's voice plays (`expo-audio`'s `AudioStream`
   holds a record-only audio session that playback has to replace) and restarted the moment
-  Gem finishes (`stop()` then `start()`; a stopped stream must never be restarted without
+  Gem finishes. The player itself stops it (`AnswerAudio.setBeforePlay` → `standBy()`)
+  and waits for that **before** any audio starts: stopping it mid-playback cut Gem off, which
+  made "Read again" (a cached file that plays instantly) silent (`stop()` then `start()`; a stopped stream must never be restarted without
   the `stop()`). Android keeps the stream running. A stall watchdog restarts the stream if
   no buffers arrive for 4 s.
 - **Mic health log (development):** every 5 s the Expo terminal shows

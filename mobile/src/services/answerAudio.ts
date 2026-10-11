@@ -48,6 +48,14 @@ export class AnswerAudio {
     private readonly cacheSize: number = ANSWER_AUDIO_CACHE_SIZE,
   ) {}
 
+  /** Runs before any audio starts: the mic steps aside first (iOS stops its stream), so
+   * that never happens mid-playback and cuts Gem off (a cached replay starts instantly). */
+  private beforePlay: () => Promise<void> = async () => undefined;
+
+  setBeforePlay(fn: () => Promise<void>): void {
+    this.beforePlay = fn;
+  }
+
   /** Number of answers whose audio is held locally (for tests/diagnostics). */
   get cached(): number {
     return this.cache.size;
@@ -59,6 +67,12 @@ export class AnswerAudio {
     const gen = ++this.generation;
     // Mark as speaking right away: the mic is muted before any audio comes out.
     this.onSpeaking(true);
+    try {
+      await this.beforePlay();
+    } catch (err) {
+      log('mic did not step aside', err);
+    }
+    if (gen !== this.generation) return 'remote';
     await enterListeningAudioMode();
     if (gen !== this.generation) return 'remote';
     if (!audioUrl) {

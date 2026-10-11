@@ -33,10 +33,11 @@ jest.mock('../hooks/useActivity', () => ({
 }));
 
 let mic: SpeechCaptureOptions;
+const mockStandBy = jest.fn(async () => undefined);
 jest.mock('../hooks/useSpeechCapture', () => ({
   useSpeechCapture: (o: SpeechCaptureOptions) => {
     mic = o;
-    return { active: o.enabled, error: null };
+    return { active: o.enabled, error: null, standBy: mockStandBy };
   },
 }));
 
@@ -230,6 +231,16 @@ describe('useAssistant', () => {
     await act(async () => ask());
     await waitFor(() => expect(sendTurn).toHaveBeenCalledTimes(2));
     expect(sendTurn.mock.calls[1][1]).toEqual({ audio_base64: expect.any(String), audio_mime: 'audio/wav' });
+  });
+
+  it('Read again moves the mic aside before replaying', async () => {
+    sendTurn.mockResolvedValue(turn());
+    const { result } = await setup();
+    await act(async () => ask());
+    await waitFor(() => expect(result.current.state.answer).not.toBeNull());
+    mockStandBy.mockClear();
+    await act(async () => result.current.replay());
+    await waitFor(() => expect(mockStandBy).toHaveBeenCalled());
   });
 
   it('asks the camera for a ~1080p capture size once it is ready (smooth preview)', async () => {

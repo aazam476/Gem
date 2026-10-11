@@ -35,6 +35,9 @@ export interface SpeechCaptureOptions {
 export interface SpeechCapture {
   active: boolean;
   error: string | null;
+  /** Make way for Gem's voice before it plays (iOS: stop the stream now, not mid-playback).
+   * Resolves once done; listening resumes when `paused` turns false. */
+  standBy: () => Promise<void>;
 }
 
 export const MIC_STALL_MS = 4_000;
@@ -138,6 +141,16 @@ export function useSpeechCapture(options: SpeechCaptureOptions): SpeechCapture {
     if (!options.enabled || stream == null) return;
     void enqueue(startStream);
     const watchdog = setInterval(() => {
+      if (paused.current && !opts.current.paused) {
+        // Stood by for audio that never became "speaking" (it failed instantly): resume.
+        void enqueue(async () => {
+          if (!paused.current || opts.current.paused) return;
+          paused.current = false;
+          log('resuming: Gem is not speaking');
+          await startStream();
+        });
+        return;
+      }
       if (!paused.current && Date.now() - lastBufferAt.current > MIC_STALL_MS) {
         log('no mic audio for', MIC_STALL_MS, 'ms, restarting stream');
         void enqueue(startStream);
@@ -166,11 +179,11 @@ export function useSpeechCapture(options: SpeechCaptureOptions): SpeechCapture {
     };
   }, [options.enabled, stream, enqueue, startStream]);
 
-  // iOS: stop the stream while Gem's voice plays; restart it right after.
-  const pauseNow = pauseStream && options.enabled && options.paused && stream != null;
-  useEffect(() => {
-    if (!pauseNow || stream == null) return;
-    void enqueue(async () => {
+  /** iOS: stop the stream for Gem's voice (idempotent). */
+  const standBy = useCallback((): Promise<void> => {
+    if (!pauseStream || stream == null) return Promise.resolve();
+    return enqueue(async () => {
+      if (paused.current) return;
       paused.current = true;
       try {
         stream.stop();
@@ -179,14 +192,22 @@ export function useSpeechCapture(options: SpeechCaptureOptions): SpeechCapture {
       }
       log('stream paused while Gem speaks');
     });
+  }, [pauseStream, stream, enqueue]);
+
+  // iOS: the stream stays stopped while Gem's voice plays and restarts right after.
+  const pauseNow = pauseStream && options.enabled && options.paused && stream != null;
+  useEffect(() => {
+    if (!pauseNow || stream == null) return;
+    void standBy(); // normally already done by the player before it started
     return () => {
       void enqueue(async () => {
+        if (!paused.current) return; // already resumed
         paused.current = false;
         if (!mounted.current || !opts.current.enabled) return;
         await startStream(); // immediately: no gap after Gem finishes
       });
     };
-  }, [pauseNow, stream, enqueue, startStream]);
+  }, [pauseNow, stream, enqueue, startStream, standBy]);
 
-  return { active, error: unsupported ? 'The live microphone only works in the phone app.' : error };
+  return { active, error: unsupported ? 'The live microphone only works in the phone app.' : error, standBy };
 }

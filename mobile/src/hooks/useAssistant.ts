@@ -217,6 +217,11 @@ export function useAssistant(): AssistantController {
       submit({ audio_base64: bytesToBase64(encodeWav(pcm, rate)), audio_mime: 'audio/wav' });
     },
   });
+  // The player moves the mic aside before any audio starts (see AnswerAudio.setBeforePlay).
+  const { standBy } = mic;
+  useEffect(() => {
+    audio.current?.setBeforePlay(standBy);
+  }, [standBy]);
 
   return {
     state,

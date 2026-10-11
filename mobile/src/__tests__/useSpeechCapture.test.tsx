@@ -176,6 +176,42 @@ describe('useSpeechCapture', () => {
       expect(o.onUtterance).toHaveBeenCalledTimes(1);
     });
 
+    it('iOS: standBy stops the stream before Gem plays; it restarts when Gem finishes', async () => {
+      const { stream } = setup();
+      let o = opts();
+      const { result, rerender } = await renderHook(() => useSpeechCapture(o));
+      await flush();
+      expect(stream.start).toHaveBeenCalledTimes(1);
+      await act(async () => result.current.standBy()); // the player, before playing
+      expect(stream.stop).toHaveBeenCalledTimes(2); // the stop-before-start at launch, then this
+      o = opts({ muted: true, paused: true }); // speaking
+      await rerender({});
+      await flush();
+      expect(stream.stop).toHaveBeenCalledTimes(2); // not stopped twice
+      o = opts(); // Gem finished
+      await rerender({});
+      await flush();
+      expect(stream.start).toHaveBeenCalledTimes(2);
+    });
+
+    it('iOS: if Gem never actually spoke after standBy, the watchdog resumes listening', async () => {
+      jest.useFakeTimers();
+      try {
+        const { stream } = setup();
+        const { result } = await renderHook(() => useSpeechCapture(opts()));
+        await act(async () => {
+          await jest.advanceTimersByTimeAsync(10);
+        });
+        await act(async () => result.current.standBy()); // playback failed instantly; never "speaking"
+        await act(async () => {
+          await jest.advanceTimersByTimeAsync(4_100);
+        });
+        expect(stream.start).toHaveBeenCalledTimes(2);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
     it('Android keeps the stream running and just ignores it', async () => {
       const original = Platform.OS;
       Object.defineProperty(Platform, 'OS', { value: 'android', configurable: true });

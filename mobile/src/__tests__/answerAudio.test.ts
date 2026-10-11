@@ -50,7 +50,7 @@ describe('AnswerAudio', () => {
     expect(createAudioPlayer).toHaveBeenCalledTimes(1); // replay did not refetch
     expect(File.downloadFileAsync).toHaveBeenCalledTimes(1); // downloaded once, played from the file
     expect((createAudioPlayer as jest.Mock).mock.calls[0][0]).toEqual({ uri: expect.stringMatching(/gem-answers\/t1\.mp3$/) });
-    // mic stays open (barge-in) but output is forced to the loudspeaker, not the earpiece
+    // output is forced to the loudspeaker, not the earpiece
     expect(setAudioModeAsync).toHaveBeenCalledWith(expect.objectContaining({ allowsRecording: true, shouldRouteThroughEarpiece: false }));
     expect(player.play).toHaveBeenCalledTimes(2);
     expect(player.seekTo).toHaveBeenCalledWith(0);
@@ -58,6 +58,27 @@ describe('AnswerAudio', () => {
     player.finish();
     expect(speaking[speaking.length - 1]).toBe(false);
     expect(Speech.speak).not.toHaveBeenCalled();
+  });
+
+  it('moves the mic aside BEFORE playing, also for an instant replay (regression: Read again was silent)', async () => {
+    const player = playablePlayer();
+    (createAudioPlayer as jest.Mock).mockReturnValue(player);
+    const order: string[] = [];
+    const realPlay = player.play.getMockImplementation()!;
+    player.play.mockImplementation(() => {
+      order.push('play');
+      realPlay();
+    });
+    const audio = new TrackedAudio(() => undefined);
+    audio.setBeforePlay(async () => {
+      await new Promise((r) => setTimeout(r, 5)); // the mic takes a moment to stop
+      order.push('mic stood by');
+    });
+    await audio.play('t1', '/a', 'x'); // first time: downloads
+    player.finish();
+    order.length = 0;
+    await audio.play('t1', '/a', 'x'); // Read again: cached file, plays at once
+    expect(order).toEqual(['mic stood by', 'play']);
   });
 
   it('reports speaking immediately so the mic stays off during the download', async () => {
