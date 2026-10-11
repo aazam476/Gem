@@ -9,6 +9,7 @@ The phone never submits vitals values itself.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 import uuid
@@ -22,6 +23,9 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 
+from .assistant.brain import Brain, make_brain
+from .assistant.routes import build_router, sweep_forever
+from .assistant.sessions import SessionStore
 from .config import Settings, load_settings
 from .imaging import ImageError, prepare_image
 from .ingest import IngestResult, ingest, timed_evaluate
@@ -83,6 +87,8 @@ def create_app(
     *,
     vision: VisionClient | None = None,
     voice: ElevenLabsVoice | None = None,
+    brain: Brain | None = None,
+    session_store: SessionStore | None = None,
 ) -> FastAPI:
     settings = settings or load_settings()
     store = Store(settings.database_path)
@@ -93,19 +99,33 @@ def create_app(
     if ai_mode == "mock" and not settings.mock_ai:
         log.warning("GEMINI_API_KEY is not set: using the mock vision model.")
 
+    sessions = session_store if session_store is not None else SessionStore(
+        idle_timeout_s=settings.session_idle_timeout_s, max_frames=settings.session_max_frames
+    )
+    brain_client = brain or make_brain(settings)
+
+    def study_context() -> str | None:
+        # Until researcher uploads exist (TASKS phase 9), the active protocol's
+        # instructions are the study context Gem receives.
+        active = store.active_protocol()
+        return f"{active.title}: {active.prompt_text}" if active else None
+
     @asynccontextmanager
     async def lifespan(_: FastAPI):
+        sweeper = asyncio.create_task(sweep_forever(sessions, min(30.0, settings.session_idle_timeout_s / 4)))
         yield
+        sweeper.cancel()
         store.close()
 
     app = FastAPI(title="Gem API", version="1.0.0", lifespan=lifespan)
     app.state.store = store
     app.state.recorder = recorder
     app.state.settings = settings
+    app.state.sessions = sessions
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
-        allow_methods=["GET", "POST"],
+        allow_methods=["GET", "POST", "DELETE"],
         allow_headers=["Content-Type", "X-Gateway-Token"],
     )
 
@@ -348,6 +368,7 @@ def create_app(
         return StreamingResponse(stream, media_type="audio/mpeg",
                                  headers={"Cache-Control": "no-store"})
 
+    app.include_router(build_router(settings, sessions, brain_client, voice_client, study_context))
     return app
 
 

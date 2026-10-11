@@ -55,6 +55,16 @@ class Settings:
     max_image_long_edge: int = 1024
 
     capture_ttl_s: float = 600.0
+
+    # Gem assistant (camera + voice). See docs/ASSISTANT_SPEC.md.
+    assistant_model: str = "gemini-3.8-flash"
+    assistant_timeout_s: float = 20.0
+    session_idle_timeout_s: float = 600.0  # purge a context window after 10 min without frames or prompts
+    session_max_frames: int = 10           # rolling frame buffer per session
+    frames_per_turn: int = 3               # most recent frames attached to each prompt
+    frame_long_edge: int = 768
+    max_history_turns: int = 20
+    max_audio_bytes: int = 4_000_000
     cors_origins: list[str] = field(
         default_factory=lambda: ["http://localhost:8081", "http://localhost:19006"]
     )
@@ -82,6 +92,11 @@ def load_settings(**overrides: object) -> Settings:
         ),
         ai_timeout_s=_float("GEM_AI_TIMEOUT_S", 8.0),
         capture_ttl_s=_float("GEM_CAPTURE_TTL_S", 600.0),
+        assistant_model=os.getenv("GEMINI_ASSISTANT_MODEL", "gemini-3.8-flash"),
+        assistant_timeout_s=_float("GEM_ASSISTANT_TIMEOUT_S", 20.0),
+        session_idle_timeout_s=_float("GEM_SESSION_IDLE_TIMEOUT_S", 600.0),
+        session_max_frames=int(_float("GEM_SESSION_MAX_FRAMES", 10)),
+        frames_per_turn=int(_float("GEM_FRAMES_PER_TURN", 3)),
         cors_origins=_list(
             "GEM_CORS_ORIGINS", ["http://localhost:8081", "http://localhost:19006"]
         ),

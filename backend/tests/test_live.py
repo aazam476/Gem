@@ -40,3 +40,20 @@ def test_elevenlabs_returns_audio() -> None:
     assert settings.elevenlabs_api_key, "ELEVENLABS_API_KEY missing"
     audio = asyncio.run(ElevenLabsVoice(settings).synthesize("Hello from Gem."))
     assert len(audio) > 1000
+
+
+def test_assistant_answers_about_fixture_photo() -> None:
+    import base64
+
+    from app.assistant.brain import GeminiBrain, Prompt, build_system_prompt
+
+    settings = load_settings()
+    assert settings.gemini_api_key, "GEMINI_API_KEY missing"
+    image = prepare_image(base64.b64encode((FIXTURES / "bp_monitor_synthetic.jpg").read_bytes()).decode(),
+                          max_bytes=10**7, long_edge=768)
+    prompt = Prompt(build_system_prompt(None), [], [image.jpeg], None, None,
+                    "What is my blood pressure, and where is the start button?")
+    reply = asyncio.run(GeminiBrain(settings).reply(prompt))
+    print(reply)
+    assert reply.is_request and "128" in reply.answer
+    assert reply.annotations, "expected Gemini to mark something"
