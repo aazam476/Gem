@@ -98,52 +98,47 @@ playback finished (or watchdog) → audio session → record, mic stream restart
 10 min with no frame and no prompt → session purged; next call gets 410 → app opens a new session
 ```
 
-### Answer screen, interruptions and the listening cycle
+### Answer screen and the listening cycle
 
 ```
 camera + frames ──(you stop talking)──▶ thinking (mic ignored) ──▶ answer screen
-       ▲                                                            │  frames PAUSED, mic LIVE
-       │                                                            │  Gem speaking → barge-in mode
+       ▲                                                            │  frames PAUSED
+       │                                                            │  Gem speaking → mic ignored
+       │                                                            │  Gem done → mic LIVE again
        └──────────────────────── Dismiss ◀──────────────────────────┤
-                                                                     └─ you talk → Gem stops, new question
-                                                                        (interrupted=true) → new answer screen
+                                                                     └─ you ask a follow-up → new answer screen
 ```
 
-- The native mic stream is started **once** and never stopped while the app is open (a
-  stopped `AudioStream` releases its resources and may not restart — this caused "no
-  listening after Dismiss"). Buffers are ignored only while a question is being answered
-  (`thinking`). A stall watchdog restarts the stream if no buffers arrive for 4 s.
+- **No interrupting.** The mic is ignored while Gem thinks and while it speaks
+  (`isMicMuted`), and for 300 ms after it finishes so the tail of its voice isn't taken
+  for a question. Talking over Gem does nothing; the answer screen says "Gem is speaking —
+  ask your next question when it finishes", then "Listening — ask a follow-up anytime."
+- **The mic stream:** started once when the camera opens. Muting just ignores buffers.
+  On **iOS** the stream is stopped while Gem's voice plays (`expo-audio`'s `AudioStream`
+  holds a record-only audio session that playback has to replace) and restarted the moment
+  Gem finishes (`stop()` then `start()`; a stopped stream must never be restarted without
+  the `stop()`). Android keeps the stream running. A stall watchdog restarts the stream if
+  no buffers arrive for 4 s.
+- **Mic health log (development):** every 5 s the Expo terminal shows
+  `[gem-mic] N buffers, loudest X dB, noise floor Y dB` while listening, plus
+  `speech started`, `utterance N ms` and `dropped N ms: not enough voiced speech`. No
+  buffers → the stream isn't running; loudest well below `noise floor + 15` while you talk
+  → the phone isn't hearing you loudly enough.
 - While the answer screen is up, **no frames are added** to Gem's memory, so a follow-up
   refers to what you were looking at. Dismiss resumes 1 fps capture.
-- **iOS needs a different mic while Gem speaks.** `expo-audio`'s `AudioStream` sets the
-  audio session to `.record` and has no handler for session changes, so the moment Gem's
-  audio plays (which needs play-and-record) the stream's engine stops — interrupting was
-  impossible and the mic only came back via the 4 s stall watchdog after Gem finished.
-  Now, on iOS, while Gem speaks the stream is paused and the **file recorder**
-  (`useAudioRecorder`, play-and-record, 16 kHz WAV, level metering every 50 ms) listens;
-  `logic/bargeIn.ts` starts only once Gem's voice is **audibly playing** (not while the
-  answer downloads), learns Gem's echo level over 0.5 s, keeps following it (frozen while a
-  possible interruption is evaluated), and fires when the input is ≥ 10 dB louder (and
-  ≥ -40 dBFS) for 400 ms. Then Gem stops, the recording from 300 ms before the
-  user started is decoded and seeds the VAD (`beginUtterance`), and the stream resumes to
-  capture the rest of the sentence. When Gem finishes without interruption, the stream is
-  restarted immediately. Android keeps the stream running and uses the echo-mode VAD below.
-- **Barge-in (Android):** while Gem speaks, the VAD runs in echo mode: it measures Gem's own voice
-  through the mic for 0.4 s, then only **voiced** speech ≥ 10 dB louder than that echo for
-  **450 ms** counts (a cough, "oh!", or a door won't cut Gem off).
-  On speech start Gem stops talking immediately; the utterance is sent with
-  `interrupted: true`, and Gemini is told it was interrupted.
 - **Echo safety net:** if Gem's voice still gets through, the server ignores a turn whose
   transcript is ≥ 70 % words from Gem's last answer (`assistant/echo.py`), and the prompt
   tells Gemini to set `is_request=false` for its own voice.
 - **"No, the other chair":** history records exactly what was marked and where
   (`Marked on frame 12: yellow chair at [100, 100, 400, 300]`), and the prompt tells Gem to
-  pick a *different* object/frame when corrected.
+  pick a *different* object/frame when corrected in a follow-up.
 - Audio session: "play and record" routed to the **loudspeaker** for the whole session.
-  The phone has no app-controlled echo cancellation, so barge-in sensitivity depends on
-  speaker volume and room. Tuning knobs in `DEFAULT_VAD` (`src/logic/vad.ts`):
-  `voicingThreshold` (0.45; higher = stricter about "is this a voice"), `startMarginDb` (15),
-  `minSpeechDb` (-45), `bargeInMarginDb` (10), `bargeInHoldMs` (450), `minSpeechMs` (350).
+  Tuning knobs in `DEFAULT_VAD` (`src/logic/vad.ts`): `voicingThreshold` (0.45; higher =
+  stricter about "is this a voice"), `startMarginDb` (15), `minSpeechDb` (-45),
+  `minSpeechMs` (350), `endSilenceMs` (1000).
+- **Camera frames** are taken at ~1080p (`pictureSize` chosen by `logic/camera.ts` from the
+  camera's list once it is ready). The default "Photo" preset captured a 12 MP+ still every
+  second, which froze the preview each time.
 
 ## 4. Speech-to-text
 

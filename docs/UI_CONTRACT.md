@@ -95,13 +95,14 @@ rendered (diagnostics).
 | `activity !== 'active'` (and no answer shown) | `assistant-idle` | "Paused" (idle, 1 min) / "Gem is asleep" (expired, 10 min) + "Move your phone or speak to wake Gem" | none — movement or speech wakes it |
 | `phase === 'error'` | `assistant-error`, `assistant-retry` | `state.error` | `retry` |
 | `state.answer` older frame | `assistant-answer-age` (only when `frameAgeLabel(answer.frameAgeS)` is non-null) | "Seen 58 seconds ago" — the photo is NOT the current view | |
-| `state.answer` | `assistant-answer` (answer sheet), `assistant-answer-listening` ("Still listening — ask a follow-up anytime." / "Hearing you…" / "Thinking…" by `state.phase`), `assistant-answer-image` (only if `imageUri`), `assistant-answer-box` (scrollable text box), `assistant-answer-text`, `assistant-replay`, `assistant-dismiss` | `answer.imageUri` (show with `resizeMode="contain"` — the drawing is baked into the image), `answer.answer` | `replay`, `dismiss` |
+| `state.answer` | `assistant-answer` (answer sheet), `assistant-answer-listening` (`listeningHint(phase, speaking)`: "Gem is speaking — ask your next question when it finishes." / "Listening — ask a follow-up anytime." / "Hearing you…" / "Thinking…" by `state.phase`), `assistant-answer-image` (only if `imageUri`), `assistant-answer-box` (scrollable text box), `assistant-answer-text`, `assistant-replay`, `assistant-dismiss` | `answer.imageUri` (show with `resizeMode="contain"` — the drawing is baked into the image), `answer.answer` | `replay`, `dismiss` |
 
 Constraints specific to this screen:
 - The camera must stay mounted under the answer overlay. Frames are paused while the overlay
   is up (the hook handles it) and resume after Dismiss.
-- The mic stays live on the answer overlay: the user can talk over Gem to interrupt. Keep the
-  "still listening" hint visible there.
+- The mic is ignored while Gem speaks and live again afterwards; keep the listening hint
+  visible on the answer sheet so the user knows when to talk.
+- `CameraView` must keep `pictureSize={pictureSize}` from the hook (smooth preview).
 - Don't play other sounds: the mic is open; Gem's own voice is handled by the hook.
 - The answer image already contains the markings; don't draw boxes in the UI.
 

@@ -80,7 +80,7 @@ needs a human (see HUMAN_TESTS.md).
 
 ## Next (not started)
 - Per-patient study assignment (instead of "active protocol when the session starts")
-- Revisit barge-in (iOS recorder-based detection; see DECISIONS 45–46)
+- Barge-in removed on request (DECISIONS 59); revisit only with platform echo cancellation (custom dev build)
 
 ## Backlog (not started)
 - Decide whether to delete the legacy capture/gateway endpoints or expose the gateway as a Gem tool

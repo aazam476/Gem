@@ -3,7 +3,7 @@
 Things an agent cannot verify in a container: a real phone, camera, microphone, speaker,
 live API keys, and Gemini's accuracy on real scenes. (The web build was driven in headless
 Chromium with a fake camera earlier; the typed-question box has since been removed, so the
-answer flow, barge-in and the mic can only be tested on a phone.) Run these once per phase; record results in the
+answer flow and the mic can only be tested on a phone.) Run these once per phase; record results in the
 table at the bottom.
 
 ## 0. One-time setup (only you can do this)
@@ -45,14 +45,15 @@ cd mobile && npx expo start          # w = portal in browser; scan QR in Expo Go
 | 2.1 | Fresh install (or delete Expo Go's camera/mic permissions), open the app. | "Gem needs your camera and microphone" screen listing both as **Not allowed**. |
 | 2.2 | Tap "Allow camera and microphone", allow camera, **deny** microphone. | Still on the permission screen; Camera: Allowed, Microphone: Not allowed. |
 | 2.3 | iOS: deny again until "Open Settings" appears (or deny in Settings). Tap it, enable the mic, return to the app. | Settings opens; on return the app goes straight to the camera (no restart). |
-| 2.4 | With both granted. | Full-screen back camera; status "Listening — ask me anything"; "Mic on"; "Frames sent" counts up ~1 per second. |
+| 2.4 | With both granted. Watch the preview for 20 s while moving the phone slowly. | Full-screen back camera with a "Listening" capsule. The preview stays smooth: **no jitter or freeze once a second** (frames are taken at ~1080p). Backend log shows a frame about every second. |
 | 2.5 | Point at the BP monitor, say "What does my blood pressure say?" and stop talking. | "Hearing you…" while talking; ~1 s after you stop: "Thinking…"; then the overlay with **your photo with a yellow box** on the display, the answer in the text box, and an **ElevenLabs voice** reading it. Note time from end of speech to voice. |
-| 2.6 | While Gem is speaking, keep quiet (phone volume at your normal level), then make non-speech noise: tap the table, rustle paper, close a door, cough once. | Gem keeps talking; no "Thinking…" afterwards. If background sounds still interrupt it, raise `voicingThreshold` (e.g. 0.55) or `bargeInHoldMs` in `src/logic/vad.ts`; if Gem's own voice interrupts it, raise `bargeInMarginDb`. |
+| 2.6 | While Gem is speaking, talk over it ("wait, stop"), tap the table, cough. | Gem keeps talking to the end (no interrupting); nothing you said while it spoke is sent. The answer sheet says "Gem is speaking — ask your next question when it finishes". |
 | 2.6a | Idle on the camera screen in a normal room for 2 minutes with background noise (typing, kitchen, footsteps) but nobody talking to Gem. | Status stays "Listening"; no "Thinking…" cycles. |
-| 2.6b2 | iPhone: ask something, let Gem finish, then **immediately** ask a follow-up (no pause). | Heard right away — no multi-second delay after Gem stops. Expo terminal shows `[gem-mic] barge-in recorder listening` when Gem starts talking. |
-| 2.6c | **Interrupt:** ask "Where is the yellow chair?" with two yellow chairs in view; while Gem is still talking, say "Wait, no, the other chair." | Gem stops talking within ~0.5 s of you starting; "Hearing you…" on the answer screen; the new answer boxes the **other** chair. If it doesn't react, note the volume; lower `bargeInMarginDb`. |
+| 2.6b2 | iPhone: ask something, let Gem finish, then **immediately** ask a follow-up (half a second after it stops). | Heard right away ("Hearing you…"). Expo terminal shows `[gem-mic] stream paused while Gem speaks`, then `[gem-mic] stream started` as Gem finishes. |
+| 2.6c | **Correction:** ask "Where is the yellow chair?" with two yellow chairs in view; after Gem finishes, say "No, the other chair." | The new answer boxes the **other** chair. |
+| 2.6e | **If Gem doesn't react to your voice at all:** watch the Expo terminal for `[gem-mic]` lines while you talk. | Every 5 s: `N buffers, loudest X dB, noise floor Y dB`. While you talk, loudest should be ≥ 15 dB above the floor, followed by `speech started` and `utterance … ms`. Report the lines: 0 buffers = the stream isn't running; low loudest = too quiet; `dropped … not enough voiced speech` = voice check too strict. |
 | 2.6d | On the answer screen (Gem finished), ask a follow-up without tapping anything. | Answered; the new answer replaces the old one. "Frames sent" did **not** increase while the answer screen was up. |
-| 2.6b | If you hear nothing / interrupting fails: watch the `npx expo start` terminal for `[gem-audio]` and `[gem-mic]` lines (`user interrupted Gem at … ms (echo … dB)` when barge-in fires). | Expected sequence: `downloaded <turn> <bytes>` → `playing <turn>` → `finished <turn>`. `download failed` / `player never started` mean it fell back to the phone voice; report the line. |
+| 2.6b | If you hear nothing: watch the `npx expo start` terminal for `[gem-audio]` lines. | Expected sequence: `downloaded <turn> <bytes>` → `playing <turn>` → `finished <turn>`. `download failed` / `player never started` mean it fell back to the phone voice; report the line. |
 | 2.7 | Tap "Read it again" twice. | Same voice plays again immediately. Backend log shows only one ElevenLabs request for that answer (second GET returns `X-Gem-Audio-Cache: hit` if a new player was needed). |
 | 2.8 | Tap "Dismiss", then ask another question. | Overlay closes, "Frames sent" starts increasing again, "Mic on", and the new question is answered (repeat 3–4 cycles). |
 | 2.9 | Ask a follow-up that depends on context: "Which button starts it?" | Answer refers to the same device; the start button is marked. |
