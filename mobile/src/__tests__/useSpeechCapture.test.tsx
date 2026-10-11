@@ -6,7 +6,10 @@ import { useSpeechCapture, type SpeechCaptureOptions } from '../hooks/useSpeechC
 const mocked = useAudioStream as jest.Mock;
 
 function opts(over: Partial<SpeechCaptureOptions> = {}): SpeechCaptureOptions {
-  return { enabled: true, muted: false, onSpeechStart: jest.fn(), onUtterance: jest.fn(), onDiscard: jest.fn(), ...over };
+  return {
+    enabled: true, muted: false, echo: false,
+    onSpeechStart: jest.fn(), onUtterance: jest.fn(), onDiscard: jest.fn(), ...over,
+  };
 }
 
 function tone(ms: number, amp: number, rate = 48_000): Int16Array {
@@ -61,29 +64,54 @@ describe('useSpeechCapture', () => {
     await act(async () => buffers(audio).forEach((b) => onBuffer(b)));
     expect(o.onSpeechStart).not.toHaveBeenCalled();
     expect(o.onUtterance).not.toHaveBeenCalled();
-    expect(stream.start).not.toHaveBeenCalled(); // muted = mic actually off
+    expect(stream.start).toHaveBeenCalledTimes(1); // the stream keeps running; buffers are ignored
   });
 
-  it('stops the mic when muted and restarts it in recording mode afterwards', async () => {
+  it('keeps one stream running across mute/unmute (a stopped stream may not restart)', async () => {
     const { setAudioModeAsync } = jest.requireMock('expo-audio');
     const stream = { start: jest.fn(async () => undefined), stop: jest.fn() };
-    mocked.mockImplementation(() => ({ stream, isStreaming: true }));
+    let onBuffer: (b: AudioStreamBuffer) => void = () => undefined;
+    mocked.mockImplementation((o: { onBuffer: typeof onBuffer }) => {
+      onBuffer = o.onBuffer;
+      return { stream, isStreaming: true };
+    });
     let o = opts();
     const { rerender } = await renderHook(() => useSpeechCapture(o));
-    expect(stream.start).toHaveBeenCalledTimes(1);
-    expect(setAudioModeAsync).toHaveBeenCalledWith(expect.objectContaining({ allowsRecording: true }));
+    expect(setAudioModeAsync).toHaveBeenCalledWith(
+      expect.objectContaining({ allowsRecording: true, shouldRouteThroughEarpiece: false }),
+    );
     o = opts({ muted: true });
     await rerender({});
-    expect(stream.stop).toHaveBeenCalledTimes(1);
     o = opts({ muted: false });
     await rerender({});
-    expect(stream.start).toHaveBeenCalledTimes(2);
+    expect(stream.start).toHaveBeenCalledTimes(1);
+    expect(stream.stop).not.toHaveBeenCalled();
+    const audio = new Int16Array(48_000 * 4);
+    audio.set(tone(1000, 0.3), 48_000);
+    await act(async () => buffers(audio).forEach((b) => onBuffer(b)));
+    expect(o.onUtterance).toHaveBeenCalledTimes(1); // listening again after unmute
+  });
+
+  it('restarts the stream if buffers stop arriving', async () => {
+    jest.useFakeTimers();
+    try {
+      const stream = { start: jest.fn(async () => undefined), stop: jest.fn() };
+      mocked.mockImplementation(() => ({ stream, isStreaming: true }));
+      await renderHook(() => useSpeechCapture(opts()));
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(9_000);
+      });
+      expect(stream.stop).toHaveBeenCalled();
+      expect(stream.start.mock.calls.length).toBeGreaterThanOrEqual(2);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('reports when live audio is unavailable (web)', async () => {
     mocked.mockReturnValue({ stream: null, isStreaming: false });
     const { result } = await renderHook(() => useSpeechCapture(opts()));
     expect(result.current.active).toBe(false);
-    expect(result.current.error).toMatch(/Type your question/);
+    expect(result.current.error).toMatch(/only works in the phone app/);
   });
 });

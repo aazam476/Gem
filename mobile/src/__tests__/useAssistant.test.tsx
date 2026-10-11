@@ -41,6 +41,8 @@ beforeEach(() => {
   sendFrame.mockResolvedValue({ frames_buffered: 1, frames_received: 1, kept: true, change_score: 0.12, expires_in_s: 600 });
 });
 
+const ask = (pcm = new Int16Array(1600)) => mic.onUtterance(pcm, 16000);
+
 async function setup() {
   const hook = await renderHook(() => useAssistant());
   await waitFor(() => expect(hook.result.current.state.phase).toBe('listening'));
@@ -105,8 +107,8 @@ describe('useAssistant', () => {
     sendTurn.mockReturnValue(new Promise((r) => (resolve = r)));
     const { result } = await setup();
     await act(async () => {
-      result.current.sendText('first');
-      result.current.sendText('second');
+      ask();
+      ask();
     });
     expect(sendTurn).toHaveBeenCalledTimes(1);
     expect(mic.muted).toBe(true);
@@ -125,17 +127,95 @@ describe('useAssistant', () => {
     (createAudioPlayer as jest.Mock).mockReturnValue(player);
     sendTurn.mockResolvedValue(turn({ audio_url: '/sessions/s-1/turns/t-1/speech' }));
     const { result } = await setup();
-    await act(async () => result.current.sendText('hi'));
+    await act(async () => ask());
     await waitFor(() => expect(player.play).toHaveBeenCalledTimes(1));
     await act(async () => result.current.replay());
     await waitFor(() => expect(player.play).toHaveBeenCalledTimes(2));
     expect(createAudioPlayer).toHaveBeenCalledTimes(1);
   });
 
+  it('lets the user interrupt Gem mid-answer ("wait, no, the other chair")', async () => {
+    let finish: (s: { playing: boolean; didJustFinish: boolean }) => void = () => undefined;
+    const player = {
+      playing: false, play: jest.fn(), pause: jest.fn(), remove: jest.fn(), seekTo: jest.fn(async () => undefined),
+      addListener: jest.fn((_e: string, cb: typeof finish) => {
+        finish = cb;
+        setTimeout(() => cb({ playing: true, didJustFinish: false }), 0);
+        return { remove: jest.fn() };
+      }),
+    };
+    (createAudioPlayer as jest.Mock).mockReturnValue(player);
+    sendTurn.mockResolvedValue(turn({ audio_url: '/sessions/s-1/turns/t-1/speech' }));
+    const { result } = await setup();
+    await act(async () => ask());
+    await waitFor(() => expect(result.current.state.speaking).toBe(true));
+    // Gem is talking: the mic is live in barge-in (echo) mode, not muted
+    expect(mic.muted).toBe(false);
+    expect(mic.echo).toBe(true);
+    await act(async () => mic.onSpeechStart());
+    expect(player.pause).toHaveBeenCalled(); // Gem stops talking immediately
+    expect(result.current.state.speaking).toBe(false);
+    expect(result.current.state.phase).toBe('hearing');
+    sendTurn.mockResolvedValue(turn({ turn_id: 't-2', answer: 'Sorry, this one.' }));
+    await act(async () => ask());
+    await waitFor(() => expect(result.current.state.answer?.turnId).toBe('t-2'));
+    expect(sendTurn.mock.calls[1][1]).toMatchObject({ audio_mime: 'audio/wav', interrupted: true });
+    void finish;
+  });
+
+  it('a follow-up after Gem finished is not marked as an interruption', async () => {
+    sendTurn.mockResolvedValue(turn());
+    const { result } = await setup();
+    await act(async () => ask());
+    await waitFor(() => expect(result.current.state.answer).not.toBeNull());
+    await act(async () => result.current.dismiss());
+    await act(async () => mic.onSpeechStart());
+    await act(async () => ask());
+    await waitFor(() => expect(sendTurn).toHaveBeenCalledTimes(2));
+    expect(sendTurn.mock.calls[1][1].interrupted).toBeUndefined();
+  });
+
+  it('stops adding frames while an answer is shown and resumes after dismiss', async () => {
+    jest.useFakeTimers();
+    try {
+      sendTurn.mockResolvedValue(turn());
+      const hook = await renderHook(() => useAssistant());
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(10);
+      });
+      const takePictureAsync = jest.fn(async () => ({ uri: 'file://f.jpg', width: 3000, height: 4000 }));
+      await act(async () => {
+        hook.result.current.attachCamera({ takePictureAsync } as never);
+        hook.result.current.onCameraReady();
+      });
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(2050);
+      });
+      expect(sendFrame).toHaveBeenCalledTimes(2);
+      await act(async () => {
+        ask();
+        await jest.advanceTimersByTimeAsync(10);
+      });
+      expect(hook.result.current.state.answer).not.toBeNull();
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(5000);
+      });
+      expect(sendFrame).toHaveBeenCalledTimes(2); // paused behind the answer
+      expect(mic.muted).toBe(false); // ...but still listening
+      await act(async () => hook.result.current.dismiss());
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(2050);
+      });
+      expect(sendFrame).toHaveBeenCalledTimes(4); // the cycle repeats
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it('dismiss hides the answer', async () => {
     sendTurn.mockResolvedValue(turn());
     const { result } = await setup();
-    await act(async () => result.current.sendText('hi'));
+    await act(async () => ask());
     await waitFor(() => expect(result.current.state.answer).not.toBeNull());
     await act(async () => result.current.dismiss());
     expect(result.current.state.answer).toBeNull();
@@ -144,7 +224,7 @@ describe('useAssistant', () => {
   it('ignored speech shows a notice only', async () => {
     sendTurn.mockResolvedValue(turn({ status: 'ignored', answer: '', image_url: null }));
     const { result } = await setup();
-    await act(async () => mic.onUtterance(new Int16Array(1600), 16000));
+    await act(async () => ask());
     await waitFor(() => expect(result.current.state.notice).toBe("I didn't catch that."));
     expect(result.current.state.answer).toBeNull();
   });
@@ -152,7 +232,7 @@ describe('useAssistant', () => {
   it('opens a new session when the old one timed out (10 min idle) and retries', async () => {
     sendTurn.mockRejectedValueOnce(gone()).mockResolvedValueOnce(turn());
     const { result } = await setup();
-    await act(async () => result.current.sendText('hi'));
+    await act(async () => ask());
     await waitFor(() => expect(result.current.state.answer).not.toBeNull());
     expect(createSession).toHaveBeenCalledTimes(2);
     expect(sendTurn.mock.calls.map((c) => c[0])).toEqual(['s-1', 's-2']);
@@ -161,7 +241,7 @@ describe('useAssistant', () => {
   it('network failure -> error state spoken on-device -> retry', async () => {
     sendTurn.mockRejectedValue(new NetworkError('down', false));
     const { result } = await setup();
-    await act(async () => result.current.sendText('hi'));
+    await act(async () => ask());
     await waitFor(() => expect(result.current.state.phase).toBe('error'));
     expect(Speech.speak).toHaveBeenCalledWith(expect.stringMatching(/trouble connecting/), expect.anything());
     await act(async () => result.current.retry());

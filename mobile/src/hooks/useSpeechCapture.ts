@@ -3,20 +3,26 @@
  * AudioStream (works in Expo Go), runs the VAD on-device, and hands each finished
  * utterance (16 kHz mono PCM) to `onUtterance`.
  *
- * While `muted` (Gem is thinking or talking) the stream is STOPPED, not just ignored:
- * Gem never hears itself, and iOS can leave its "record + play" audio route so Gem's
- * voice comes out of the loudspeaker instead of the earpiece.
+ * The native stream is started ONCE and kept running (a stopped AudioStream releases
+ * its native resources and may not restart). Instead:
+ * - `muted` (Gem is thinking) drops buffers,
+ * - `echo` (Gem is talking through the speaker) puts the VAD in barge-in mode, so the user
+ *   can interrupt but Gem's own voice doesn't count as speech.
+ * If buffers stop arriving (e.g. iOS interrupted the audio session) the stream is restarted.
  */
-import { setAudioModeAsync, useAudioStream, type AudioStreamBuffer } from 'expo-audio';
+import { useAudioStream, type AudioStreamBuffer } from 'expo-audio';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { MIC_SAMPLE_RATE } from '../config';
 import { TARGET_SAMPLE_RATE, resample, toMonoInt16 } from '../logic/pcm';
 import { VoiceActivityDetector } from '../logic/vad';
+import { enterListeningAudioMode } from '../services/audioMode';
 
 export interface SpeechCaptureOptions {
   enabled: boolean;
   muted: boolean;
+  /** Gem is speaking: only clearly-louder speech (the user interrupting) counts. */
+  echo: boolean;
   onSpeechStart: () => void;
   onUtterance: (audio: Int16Array, sampleRate: number) => void;
   onDiscard: () => void;
@@ -27,21 +33,27 @@ export interface SpeechCapture {
   error: string | null;
 }
 
+export const MIC_STALL_MS = 4_000;
+
 export function useSpeechCapture(options: SpeechCaptureOptions): SpeechCapture {
   const opts = useRef(options);
   const vad = useRef<VoiceActivityDetector | null>(null);
+  const lastBufferAt = useRef(0);
   const [error, setError] = useState<string | null>(null);
   const [active, setActive] = useState(false);
 
   useEffect(() => {
-    const wasMuted = opts.current.muted;
+    const prev = opts.current;
     opts.current = options;
-    if (options.muted && !wasMuted) vad.current?.reset();
+    if (options.muted && !prev.muted) vad.current?.reset();
+    vad.current?.setEchoMode(options.echo);
   });
 
   const onBuffer = useCallback((buffer: AudioStreamBuffer) => {
+    lastBufferAt.current = Date.now();
     if (opts.current.muted) return;
     if (!vad.current) vad.current = new VoiceActivityDetector();
+    vad.current.setEchoMode(opts.current.echo);
     const samples = resample(toMonoInt16(buffer.data, buffer.channels), buffer.sampleRate, TARGET_SAMPLE_RATE);
     for (const ev of vad.current.push(samples)) {
       if (ev.type === 'speech_start') opts.current.onSpeechStart();
@@ -55,25 +67,39 @@ export function useSpeechCapture(options: SpeechCaptureOptions): SpeechCapture {
   // expo-audio's AudioStream is native-only; on web the hook returns a null stream.
   const unsupported = stream == null;
 
-  const listening = options.enabled && !options.muted;
-
   useEffect(() => {
-    if (!listening || stream == null) return;
+    if (!options.enabled || stream == null) return;
     let cancelled = false;
-    setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true, shouldRouteThroughEarpiece: false })
-      .catch(() => undefined)
-      .then(() => (cancelled ? undefined : stream.start()))
-      .then(() => {
-        if (!cancelled) {
-          setActive(true);
-          setError(null);
+    const start = () =>
+      enterListeningAudioMode()
+        .then(() => (cancelled ? undefined : stream.start()))
+        .then(() => {
+          if (!cancelled) {
+            lastBufferAt.current = Date.now();
+            setActive(true);
+            setError(null);
+          }
+        })
+        .catch((err: unknown) => {
+          if (!cancelled) {
+            setActive(false);
+            setError(err instanceof Error ? err.message : String(err));
+          }
+        });
+    void start();
+    const watchdog = setInterval(() => {
+      if (Date.now() - lastBufferAt.current > MIC_STALL_MS) {
+        try {
+          stream.stop();
+        } catch {
+          // not running
         }
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : String(err));
-      });
+        void start();
+      }
+    }, MIC_STALL_MS);
     return () => {
       cancelled = true;
+      clearInterval(watchdog);
       try {
         stream.stop();
       } catch {
@@ -82,7 +108,7 @@ export function useSpeechCapture(options: SpeechCaptureOptions): SpeechCapture {
       vad.current?.reset();
       setActive(false);
     };
-  }, [listening, stream]);
+  }, [options.enabled, stream]);
 
-  return { active, error: unsupported ? 'Live microphone is not available here. Type your question instead.' : error };
+  return { active, error: unsupported ? 'The live microphone only works in the phone app.' : error };
 }

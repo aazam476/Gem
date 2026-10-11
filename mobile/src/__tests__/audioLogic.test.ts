@@ -73,6 +73,24 @@ describe('VoiceActivityDetector', () => {
     expect(feed(vad, noise(3000, 0.03, 9))).toEqual([]);
   });
 
+  it("barge-in mode ignores Gem's own voice but hears the user talking over it", () => {
+    const vad = new VoiceActivityDetector();
+    feed(vad, noise(1000, 0.002)); // calibrate the room
+    vad.setEchoMode(true);
+    const gemVoice = tone(3000, 0.05, 300); // about -29 dBFS of echo from the speaker
+    expect(feed(vad, gemVoice)).toEqual([]);
+    expect(vad.echoLevelDb).toBeGreaterThan(-35);
+    const user = concat([tone(800, 0.4, 180), noise(1300, 0.002)]); // ~ -11 dBFS, much louder
+    const types = feed(vad, user).map((e) => e.type);
+    expect(types[0]).toBe('speech_start');
+  });
+
+  it('without barge-in mode the same echo would count as speech', () => {
+    const vad = new VoiceActivityDetector();
+    feed(vad, noise(1000, 0.002));
+    expect(feed(vad, tone(1500, 0.05, 300)).map((e) => e.type)).toContain('speech_start');
+  });
+
   it('forces an utterance out at the maximum length', () => {
     const vad = new VoiceActivityDetector({ maxUtteranceMs: 2000 });
     const events = feed(vad, concat([noise(500, 0.002), tone(3000, 0.2)]));

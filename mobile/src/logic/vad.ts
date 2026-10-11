@@ -25,6 +25,11 @@ export interface VadOptions {
   initialNoiseDb: number;
   /** Listen this long first to measure the room before detecting anything. */
   calibrationMs: number;
+  /** Barge-in (Gem is talking through the speaker): learn Gem's echo level this long first... */
+  echoCalibrationMs: number;
+  /** ...then only treat speech this many dB louder than the echo as the user interrupting. */
+  bargeInMarginDb: number;
+  bargeInHoldMs: number;
 }
 
 export const DEFAULT_VAD: VadOptions = {
@@ -40,6 +45,9 @@ export const DEFAULT_VAD: VadOptions = {
   maxUtteranceMs: 30_000,
   initialNoiseDb: -60,
   calibrationMs: 500,
+  echoCalibrationMs: 400,
+  bargeInMarginDb: 10,
+  bargeInHoldMs: 250,
 };
 
 export type VadEvent =
@@ -62,6 +70,10 @@ export class VoiceActivityDetector {
   private calibrationLeftMs: number;
   private calibrationDb: number[] = [];
   private utteranceDb: number[] = [];
+  private echoMode = false;
+  private echoDb = -120;
+  private echoCalibrationLeftMs = 0;
+  private echoCalibrationDb: number[] = [];
 
   constructor(options: Partial<VadOptions> = {}) {
     this.options = { ...DEFAULT_VAD, ...options };
@@ -76,6 +88,29 @@ export class VoiceActivityDetector {
 
   get noiseFloorDb(): number {
     return this.noiseDb;
+  }
+
+  /**
+   * Barge-in mode: Gem's voice is coming out of the speaker and into the mic. Learn how
+   * loud that echo is, then require the user to be clearly louder to count as speech.
+   */
+  setEchoMode(on: boolean): void {
+    if (on === this.echoMode) return;
+    this.echoMode = on;
+    if (on) {
+      this.echoDb = this.noiseDb;
+      this.echoCalibrationLeftMs = this.options.echoCalibrationMs;
+      this.echoCalibrationDb = [];
+      if (!this.speaking) this.aboveMs = 0;
+    }
+  }
+
+  get inEchoMode(): boolean {
+    return this.echoMode;
+  }
+
+  get echoLevelDb(): number {
+    return this.echoDb;
   }
 
   /** Drop any partial utterance (e.g. while the assistant itself is talking). Keeps the noise floor. */
@@ -114,16 +149,32 @@ export class VoiceActivityDetector {
       return null;
     }
 
-    const startThreshold = Math.max(this.noiseDb + o.startMarginDb, o.minSpeechDb);
+    let startThreshold = Math.max(this.noiseDb + o.startMarginDb, o.minSpeechDb);
+    let startHoldMs = o.startHoldMs;
+
+    if (!this.speaking && this.echoMode) {
+      if (this.echoCalibrationLeftMs > 0) {
+        this.echoCalibrationDb.push(db);
+        this.echoCalibrationLeftMs -= o.frameMs;
+        if (this.echoCalibrationLeftMs <= 0) {
+          this.echoDb = Math.max(this.noiseDb, percentile(this.echoCalibrationDb, 0.9));
+        }
+        this.preroll.push(frame);
+        while (this.preroll.length > Math.ceil(o.prerollMs / o.frameMs)) this.preroll.shift();
+        return null;
+      }
+      startThreshold = Math.max(startThreshold, this.echoDb + o.bargeInMarginDb);
+      startHoldMs = Math.max(startHoldMs, o.bargeInHoldMs);
+    }
 
     if (!this.speaking) {
       this.preroll.push(frame);
-      const maxPreroll = Math.ceil(o.prerollMs / o.frameMs) + Math.ceil(o.startHoldMs / o.frameMs);
+      const maxPreroll = Math.ceil(o.prerollMs / o.frameMs) + Math.ceil(startHoldMs / o.frameMs);
       while (this.preroll.length > maxPreroll) this.preroll.shift();
 
       if (db > startThreshold) {
         this.aboveMs += o.frameMs;
-        if (this.aboveMs >= o.startHoldMs) {
+        if (this.aboveMs >= startHoldMs) {
           this.speaking = true;
           this.utterance = [...this.preroll];
           this.preroll = [];
@@ -134,9 +185,15 @@ export class VoiceActivityDetector {
         }
       } else {
         this.aboveMs = 0;
-        // Track the room: follow quieter levels quickly, louder ones slowly.
-        const alpha = db < this.noiseDb ? 0.2 : 0.02;
-        this.noiseDb += alpha * (db - this.noiseDb);
+        if (this.echoMode) {
+          // Follow Gem's voice level (rises quickly, falls slowly between words).
+          const alpha = db > this.echoDb ? 0.1 : 0.02;
+          this.echoDb += alpha * (db - this.echoDb);
+        } else {
+          // Track the room: follow quieter levels quickly, louder ones slowly.
+          const alpha = db < this.noiseDb ? 0.2 : 0.02;
+          this.noiseDb += alpha * (db - this.noiseDb);
+        }
       }
       return null;
     }

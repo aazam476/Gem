@@ -158,7 +158,10 @@ export interface FrameAck {
   expires_in_s: number;
 }
 
-export type TurnInput = { audio_base64: string; audio_mime: 'audio/wav' } | { text: string };
+export type TurnInput =
+  /** `interrupted`: the user started speaking while Gem was still answering. */
+  | { audio_base64: string; audio_mime: 'audio/wav'; interrupted?: boolean }
+  | { text: string; interrupted?: boolean };
 
 export interface TurnOut {
   turn_id: string;

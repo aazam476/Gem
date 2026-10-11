@@ -61,9 +61,19 @@ export const initialAssistantState: AssistantState = {
   notice: null,
 };
 
-/** The mic must not capture Gem's own voice, nor queue a second prompt. */
+/**
+ * The mic is ignored only while a question is being answered (no queued second prompt).
+ * While Gem SPEAKS the mic stays live in barge-in mode, so the user can interrupt
+ * ("wait, no, the other chair").
+ */
 export function isMicMuted(s: AssistantState): boolean {
-  return s.phase === 'starting' || s.phase === 'thinking' || s.speaking;
+  return s.phase === 'starting' || s.phase === 'thinking';
+}
+
+/** Camera frames go into Gem's memory only while the user is looking through the camera,
+ * not while an answer (photo + text) is on screen. */
+export function shouldStreamFrames(s: AssistantState): boolean {
+  return s.answer === null && s.phase !== 'starting' && s.phase !== 'error';
 }
 
 export function canSendTurn(s: AssistantState): boolean {

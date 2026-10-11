@@ -50,8 +50,8 @@ describe('AnswerAudio', () => {
     expect(createAudioPlayer).toHaveBeenCalledTimes(1); // replay did not refetch
     expect(File.downloadFileAsync).toHaveBeenCalledTimes(1); // downloaded once, played from the file
     expect((createAudioPlayer as jest.Mock).mock.calls[0][0]).toEqual({ uri: expect.stringMatching(/gem-answers\/t1\.mp3$/) });
-    // playback-only audio mode (mic off) so iOS uses the loudspeaker
-    expect(setAudioModeAsync).toHaveBeenCalledWith(expect.objectContaining({ allowsRecording: false, shouldRouteThroughEarpiece: false }));
+    // mic stays open (barge-in) but output is forced to the loudspeaker, not the earpiece
+    expect(setAudioModeAsync).toHaveBeenCalledWith(expect.objectContaining({ allowsRecording: true, shouldRouteThroughEarpiece: false }));
     expect(player.play).toHaveBeenCalledTimes(2);
     expect(player.seekTo).toHaveBeenCalledWith(0);
     expect(speaking).toContain(true);

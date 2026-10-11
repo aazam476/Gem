@@ -38,7 +38,6 @@ function controller(state: Partial<AssistantState> = {}, extra: Partial<Assistan
     dismiss: jest.fn(),
     replay: jest.fn(),
     retry: jest.fn(),
-    sendText: jest.fn(),
     ...extra,
   };
 }
@@ -100,19 +99,10 @@ describe('AssistantScreen contract', () => {
     expect(screen.getByTestId('assistant-mic')).toHaveTextContent(/Microphone error: busy/);
   });
 
-  it('typed question is sent and the box cleared', async () => {
-    const ctl = await renderAssistant();
-    await fireEvent.changeText(screen.getByTestId('assistant-text-input'), 'What is this?');
-    await fireEvent.press(screen.getByTestId('assistant-send'));
-    expect(ctl.sendText).toHaveBeenCalledWith('What is this?');
-    expect(screen.getByTestId('assistant-text-input').props.value).toBe('');
-  });
-
-  it('send is disabled while thinking', async () => {
-    const ctl = await renderAssistant({ phase: 'thinking' });
-    await fireEvent.changeText(screen.getByTestId('assistant-text-input'), 'x');
-    await fireEvent.press(screen.getByTestId('assistant-send'));
-    expect(ctl.sendText).not.toHaveBeenCalled();
+  it('has no typed-question box', async () => {
+    await renderAssistant();
+    expect(screen.queryByTestId('assistant-text-input')).toBeNull();
+    expect(screen.queryByTestId('assistant-send')).toBeNull();
   });
 
   it('answer: image, text box, read again, dismiss', async () => {
@@ -121,10 +111,16 @@ describe('AssistantScreen contract', () => {
     expect(screen.getByTestId('assistant-answer-image').props.source).toEqual({ uri: 'http://api/img.jpg' });
     expect(screen.getByTestId('assistant-answer-box')).toBeTruthy();
     expect(screen.getByTestId('assistant-answer-text')).toHaveTextContent('It is the blue button.');
+    expect(screen.getByTestId('assistant-answer-listening')).toHaveTextContent(/Still listening/);
     await fireEvent.press(screen.getByTestId('assistant-replay'));
     await fireEvent.press(screen.getByTestId('assistant-dismiss'));
     expect(ctl.replay).toHaveBeenCalledTimes(1);
     expect(ctl.dismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows that an interruption is being heard over the answer', async () => {
+    await renderAssistant({ answer, phase: 'hearing' });
+    expect(screen.getByTestId('assistant-answer-listening')).toHaveTextContent('Hearing you…');
   });
 
   it('answer drawn on an earlier frame says when it was seen', async () => {

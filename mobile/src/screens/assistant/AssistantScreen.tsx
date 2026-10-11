@@ -3,8 +3,7 @@
  * behavior comes from useAssistant(). Contract: docs/UI_CONTRACT.md §Assistant.
  */
 import { CameraView } from 'expo-camera';
-import { useState } from 'react';
-import { Image, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Image, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useAssistant } from '../../hooks/useAssistant';
@@ -21,9 +20,7 @@ const STATUS: Record<AssistantPhase, string> = {
 };
 
 export function AssistantScreen() {
-  const { state, attachCamera, onCameraReady, micActive, micError, frames, retry, sendText, replay, dismiss } =
-    useAssistant();
-  const [typed, setTyped] = useState('');
+  const { state, attachCamera, onCameraReady, micActive, micError, frames, retry, replay, dismiss } = useAssistant();
 
   return (
     <View testID="assistant-screen" style={{ flex: 1, backgroundColor: '#000' }}>
@@ -36,7 +33,7 @@ export function AssistantScreen() {
         onCameraReady={onCameraReady}
       />
 
-      <SafeAreaView style={{ flex: 1, justifyContent: 'space-between' }} pointerEvents="box-none">
+      <SafeAreaView style={{ flex: 1 }} pointerEvents="box-none">
         <View style={{ padding: theme.space.md, gap: theme.space.xs }} accessibilityLiveRegion="polite">
           <View style={{ backgroundColor: theme.color.overlay, borderRadius: theme.radius.md, padding: theme.space.sm }}>
             <AppText variant="patient" tone="inverse" testID="assistant-status">
@@ -68,35 +65,6 @@ export function AssistantScreen() {
           ) : null}
         </View>
 
-        <Row style={{ padding: theme.space.md, flexWrap: 'nowrap' }}>
-          <TextInput
-            testID="assistant-text-input"
-            accessibilityLabel="Type a question instead"
-            placeholder="Or type a question…"
-            placeholderTextColor={theme.color.textMuted}
-            value={typed}
-            onChangeText={setTyped}
-            style={{
-              flex: 1,
-              minWidth: 0,
-              minHeight: theme.touch.minHeight,
-              backgroundColor: theme.color.background,
-              borderRadius: theme.radius.md,
-              paddingHorizontal: theme.space.md,
-              fontSize: theme.font.body,
-              color: theme.color.text,
-            }}
-          />
-          <Button
-            testID="assistant-send"
-            label="Send"
-            onPress={() => {
-              sendText(typed);
-              setTyped('');
-            }}
-            disabled={!typed.trim() || state.phase === 'thinking' || state.phase === 'starting'}
-          />
-        </Row>
       </SafeAreaView>
 
       {state.answer ? (
@@ -120,6 +88,13 @@ export function AssistantScreen() {
           ) : (
             <View style={{ flex: 1 }} />
           )}
+          <AppText variant="small" tone="inverse" testID="assistant-answer-listening">
+            {state.phase === 'hearing'
+              ? 'Hearing you…'
+              : state.phase === 'thinking'
+                ? 'Thinking…'
+                : 'Still listening — you can interrupt or ask a follow-up.'}
+          </AppText>
           <ScrollView
             testID="assistant-answer-box"
             style={{ maxHeight: 220, backgroundColor: theme.color.background, borderRadius: theme.radius.md, marginTop: theme.space.sm }}

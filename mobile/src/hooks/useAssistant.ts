@@ -16,6 +16,7 @@ import {
   canSendTurn,
   initialAssistantState,
   isMicMuted,
+  shouldStreamFrames,
   type AssistantState,
 } from '../logic/assistantState';
 import { bytesToBase64, encodeWav } from '../logic/wav';
@@ -40,8 +41,6 @@ export interface AssistantController {
   replay: () => void;
   /** Leave the error state and try again. */
   retry: () => void;
-  /** Typed alternative to speaking. */
-  sendText: (text: string) => void;
 }
 
 export function useAssistant(): AssistantController {
@@ -53,6 +52,8 @@ export function useAssistant(): AssistantController {
   const session = useRef<string | null>(null);
   const creating = useRef<Promise<string> | null>(null);
   const audio = useRef<AnswerAudio | null>(null);
+  /** The current utterance began while Gem was talking (the user cut in). */
+  const interrupted = useRef(false);
 
   useEffect(() => {
     stateRef.current = state;
@@ -121,7 +122,8 @@ export function useAssistant(): AssistantController {
     return withSession((id) => api.sendFrame(id, frame.base64));
   }, [withSession]);
 
-  const streaming = cameraReady && appActive && state.phase !== 'starting' && state.phase !== 'error';
+  // Paused while an answer is on screen: the memory keeps what the user was asking about.
+  const streaming = cameraReady && appActive && shouldStreamFrames(state);
   const frames = useFrameStreamer(streaming, sendFrame);
 
   // -- prompts --------------------------------------------------------------------------
@@ -164,10 +166,26 @@ export function useAssistant(): AssistantController {
   const mic = useSpeechCapture({
     enabled: appActive && state.phase !== 'starting',
     muted: isMicMuted(state),
-    onSpeechStart: () => dispatch({ type: 'SPEECH_START' }),
-    onDiscard: () => dispatch({ type: 'SPEECH_DISCARDED' }),
-    onUtterance: (pcm, rate) =>
-      submit({ audio_base64: bytesToBase64(encodeWav(pcm, rate)), audio_mime: 'audio/wav' }),
+    echo: state.speaking,
+    onSpeechStart: () => {
+      // Barge-in: the user started talking over Gem -> stop Gem right away.
+      interrupted.current = stateRef.current.speaking;
+      if (stateRef.current.speaking) audio.current?.stop();
+      dispatch({ type: 'SPEECH_START' });
+    },
+    onDiscard: () => {
+      interrupted.current = false;
+      dispatch({ type: 'SPEECH_DISCARDED' });
+    },
+    onUtterance: (pcm, rate) => {
+      const wasInterrupting = interrupted.current;
+      interrupted.current = false;
+      submit({
+        audio_base64: bytesToBase64(encodeWav(pcm, rate)),
+        audio_mime: 'audio/wav',
+        ...(wasInterrupting ? { interrupted: true } : {}),
+      });
+    },
   });
 
   return {
@@ -191,9 +209,6 @@ export function useAssistant(): AssistantController {
     retry: () => {
       dispatch({ type: 'RETRY' });
       if (!session.current) startSession();
-    },
-    sendText: (text: string) => {
-      if (text.trim()) submit({ text: text.trim() });
     },
   };
 }

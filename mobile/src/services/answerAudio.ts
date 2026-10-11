@@ -6,18 +6,18 @@
  * kept, so "read it again" replays locally with no network request; the backend also
  * caches the bytes, so ElevenLabs is billed once per answer either way.
  *
- * Before playing, the audio session is switched to playback-only (the mic is stopped
- * while Gem speaks), otherwise iOS keeps the "record + play" route and output can go to
- * the quiet earpiece. If the audio can't be fetched or doesn't start, the phone speaks
- * the text itself.
+ * The mic stays open while Gem speaks (so the user can interrupt), so the audio session is
+ * "play and record" routed explicitly to the loudspeaker, never the earpiece. If the audio
+ * can't be fetched or doesn't start, the phone speaks the text itself.
  */
-import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-audio';
+import { createAudioPlayer, type AudioPlayer } from 'expo-audio';
 import { Directory, File, Paths } from 'expo-file-system';
 import * as Speech from 'expo-speech';
 import { Platform } from 'react-native';
 
 import { absoluteUrl } from '../api/client';
 import { ANSWER_AUDIO_CACHE_SIZE, AUDIO_START_TIMEOUT_MS } from '../config';
+import { enterListeningAudioMode } from './audioMode';
 
 type Listener = (speaking: boolean) => void;
 type Sub = { remove: () => void };
@@ -27,15 +27,6 @@ const DOWNLOAD_TIMEOUT_MS = 10_000;
 /** Shows up in the `npx expo start` terminal while developing. */
 function log(...args: unknown[]): void {
   if (__DEV__ && process.env.NODE_ENV !== 'test') console.log('[gem-audio]', ...args);
-}
-
-/** Switch iOS/Android to loud playback through the speaker (mic is off while Gem talks). */
-export async function enterPlaybackAudioMode(): Promise<void> {
-  try {
-    await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false, shouldRouteThroughEarpiece: false });
-  } catch (err) {
-    log('setAudioMode(playback) failed', err);
-  }
 }
 
 interface Cached {
@@ -66,9 +57,9 @@ export class AnswerAudio {
   async play(turnId: string, audioUrl: string | null, text: string): Promise<'remote' | 'device'> {
     this.stop();
     const gen = ++this.generation;
-    // Mark as speaking right away so the mic stays off while we download.
+    // Mark as speaking right away: the mic switches to barge-in mode before audio starts.
     this.onSpeaking(true);
-    await enterPlaybackAudioMode();
+    await enterListeningAudioMode();
     if (gen !== this.generation) return 'remote';
     if (!audioUrl) {
       this.speak(text, gen);

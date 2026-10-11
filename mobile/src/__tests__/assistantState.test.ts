@@ -4,6 +4,7 @@ import {
   canSendTurn,
   initialAssistantState,
   isMicMuted,
+  shouldStreamFrames,
   type AssistantEvent,
   type AssistantState,
 } from '../logic/assistantState';
@@ -33,12 +34,26 @@ describe('assistantReducer', () => {
     expect(s).toMatchObject({ phase: 'listening', answer, lastTranscript: 'what is this' });
   });
 
-  it('mutes the mic while thinking and while speaking', () => {
+  it('mutes the mic only while thinking; Gem speaking can be interrupted', () => {
     const thinking = run({ type: 'SESSION_READY' }, { type: 'TURN_START' });
     expect(isMicMuted(thinking)).toBe(true);
     expect(canSendTurn(thinking)).toBe(false);
-    const speaking = run({ type: 'SESSION_READY' }, { type: 'SPEAKING', speaking: true });
-    expect(isMicMuted(speaking)).toBe(true);
+    const speaking = run(
+      { type: 'SESSION_READY' }, { type: 'TURN_START' }, { type: 'TURN_ANSWERED', answer },
+      { type: 'SPEAKING', speaking: true },
+    );
+    expect(isMicMuted(speaking)).toBe(false);
+    expect(canSendTurn(speaking)).toBe(true);
+    const interrupting = assistantReducer(speaking, { type: 'SPEECH_START' });
+    expect(interrupting.phase).toBe('hearing');
+    expect(interrupting.answer).toEqual(answer); // answer stays up until the new one arrives
+  });
+
+  it('pauses frames while an answer is on screen and resumes after dismiss', () => {
+    const shown = run({ type: 'SESSION_READY' }, { type: 'TURN_START' }, { type: 'TURN_ANSWERED', answer });
+    expect(shouldStreamFrames(shown)).toBe(false);
+    expect(shouldStreamFrames(assistantReducer(shown, { type: 'DISMISS' }))).toBe(true);
+    expect(shouldStreamFrames(initialAssistantState)).toBe(false);
   });
 
   it('discarded speech goes back to listening', () => {
