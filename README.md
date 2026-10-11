@@ -40,7 +40,8 @@ npx expo start                  # press w → researcher portal; scan QR in Expo
 On the phone: allow camera + microphone, point at something, ask a question out loud
 ("What does this screen say?"), and stop talking. Gem shows the marked photo, the answer in
 a text box, and reads it out; **Read it again** replays without another ElevenLabs charge;
-**Dismiss** returns to the camera. You can also type a question.
+**Dismiss** returns to the camera. While Gem is answering you can talk over it to correct
+it ("wait, no, the other chair") or ask a follow-up.
 
 Optional: in the portal, deploy a protocol ("Use blood pressure template → Deploy") — its
 text is given to Gem as study context for new sessions.
