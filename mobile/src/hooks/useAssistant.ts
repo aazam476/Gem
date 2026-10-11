@@ -5,7 +5,7 @@
  */
 import type { CameraView } from 'expo-camera';
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 
 import { absoluteUrl, api, isSessionGone } from '../api/client';
 import type { FrameAck, TurnInput } from '../api/types';
@@ -19,6 +19,7 @@ import {
   shouldStreamFrames,
   type AssistantState,
 } from '../logic/assistantState';
+import { pickPictureSize } from '../logic/camera';
 import { bytesToBase64, encodeWav } from '../logic/wav';
 import { AnswerAudio } from '../services/answerAudio';
 import { prepareUpload } from '../services/image';
@@ -34,6 +35,8 @@ export interface AssistantController {
   attachCamera: (camera: CameraView | null) => void;
   onCameraReady: () => void;
   cameraReady: boolean;
+  /** Capture size for <CameraView pictureSize>: ~1080p so frames don't stall the preview. */
+  pictureSize: string | undefined;
   micActive: boolean;
   micError: string | null;
   frames: FrameStats;
@@ -52,25 +55,18 @@ export function useAssistant(): AssistantController {
   const stateRef = useRef(state);
   const camera = useRef<CameraView | null>(null);
   const [cameraReady, setCameraReady] = useState(false);
-  /** Gem's voice is audibly playing (vs. still downloading): barge-in calibrates on this. */
-  const [gemAudible, setGemAudible] = useState(false);
+  const [pictureSize, setPictureSize] = useState<string | undefined>();
   const [appActive, setAppActive] = useState(AppState.currentState !== 'background');
   const session = useRef<string | null>(null);
   const creating = useRef<Promise<string> | null>(null);
   const audio = useRef<AnswerAudio | null>(null);
-  /** The current utterance began while Gem was talking (the user cut in). */
-  const interrupted = useRef(false);
 
   useEffect(() => {
     stateRef.current = state;
   });
 
   if (audio.current === null) {
-    audio.current = new AnswerAudio(
-      (speaking) => dispatch({ type: 'SPEAKING', speaking }),
-      undefined,
-      setGemAudible,
-    );
+    audio.current = new AnswerAudio((speaking) => dispatch({ type: 'SPEAKING', speaking }));
   }
 
   /** Inactivity timings from the portal, delivered with each session. */
@@ -211,27 +207,14 @@ export function useAssistant(): AssistantController {
   const mic = useSpeechCapture({
     enabled: appActive && state.phase !== 'starting',
     muted: isMicMuted(state),
-    echo: state.speaking,
-    echoAudible: gemAudible,
+    paused: state.speaking,
     onSpeechStart: () => {
       note('speech');
-      // Barge-in: the user started talking over Gem -> stop Gem right away.
-      interrupted.current = stateRef.current.speaking;
-      if (stateRef.current.speaking) audio.current?.stop();
       dispatch({ type: 'SPEECH_START' });
     },
-    onDiscard: () => {
-      interrupted.current = false;
-      dispatch({ type: 'SPEECH_DISCARDED' });
-    },
+    onDiscard: () => dispatch({ type: 'SPEECH_DISCARDED' }),
     onUtterance: (pcm, rate) => {
-      const wasInterrupting = interrupted.current;
-      interrupted.current = false;
-      submit({
-        audio_base64: bytesToBase64(encodeWav(pcm, rate)),
-        audio_mime: 'audio/wav',
-        ...(wasInterrupting ? { interrupted: true } : {}),
-      });
+      submit({ audio_base64: bytesToBase64(encodeWav(pcm, rate)), audio_mime: 'audio/wav' });
     },
   });
 
@@ -240,8 +223,20 @@ export function useAssistant(): AssistantController {
     attachCamera: useCallback((c: CameraView | null) => {
       camera.current = c;
     }, []),
-    onCameraReady: () => setCameraReady(true),
+    onCameraReady: () => {
+      setCameraReady(true);
+      const cam = camera.current;
+      if (!cam || Platform.OS === 'web' || pictureSize) return;
+      Promise.resolve()
+        .then(() => cam.getAvailablePictureSizesAsync())
+        .then((sizes) => {
+          const size = pickPictureSize(sizes);
+          if (size) setPictureSize(size);
+        })
+        .catch(() => undefined); // keep the default size
+    },
     cameraReady,
+    pictureSize,
     micActive: mic.active,
     micError: mic.error,
     frames,

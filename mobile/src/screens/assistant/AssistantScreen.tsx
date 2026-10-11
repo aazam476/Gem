@@ -28,7 +28,7 @@ const FADE_OUT = FadeOut.duration(DURATION.exit).easing(EASE_OUT);
 
 export function AssistantScreen() {
   const { color } = useTheme();
-  const { state, attachCamera, onCameraReady, micError, activity, retry, replay, dismiss } = useAssistant();
+  const { state, attachCamera, onCameraReady, pictureSize, micError, activity, retry, replay, dismiss } = useAssistant();
   const paused = activity !== 'active';
   const ready = state.phase === 'listening' || state.phase === 'hearing';
 
@@ -42,6 +42,7 @@ export function AssistantScreen() {
         style={StyleSheet.absoluteFill}
         facing="back"
         animateShutter={false}
+        pictureSize={pictureSize}
         onCameraReady={onCameraReady}
       />
 

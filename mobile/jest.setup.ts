@@ -7,7 +7,7 @@ jest.mock('expo-camera', () => {
     React.useImperativeHandle(ref, () => ({
       takePictureAsync: jest.fn(async () => ({ uri: 'file://photo.jpg', width: 3000, height: 4000 })),
     }));
-    return React.createElement(View, { testID: props.testID });
+    return React.createElement(View, { testID: props.testID, pictureSize: props.pictureSize });
   });
   return {
     CameraView,
