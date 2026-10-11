@@ -112,7 +112,8 @@ Run 2.1, 2.4, 2.5, 2.6c, 2.7, 2.8 and 3.1 again, then `cd mobile && npm test`. C
 | 5.2 | Ask a question. | Capsule shows a spinner + "Thinking" and your question in quotes; the answer sheet springs up from the bottom (no bounce past the top). |
 | 5.3 | Drag the photo on the answer sheet down and let go past a third of the screen; repeat with a short fast flick. | Both dismiss and listening resumes. A small drag springs back. Dragging up stretches slightly and springs back. |
 | 5.4 | Settings → Accessibility → Motion → Reduce Motion on, ask again. | The answer sheet fades in/out instead of sliding. |
-| 5.5 | Turn Wi-Fi off. | A white card "I'm having trouble connecting…" with "Try again" at the bottom. |
+| 5.5 | Turn Wi-Fi off. | A card "I'm having trouble connecting…" with "Try again" at the bottom. |
+| 5.6 | Settings → Display & Brightness → Dark, then reopen Gem (permission screen if not yet granted) and ask a question. | Permission screen and answer sheet are dark with light text; the camera chrome looks the same; the status bar stays white over the camera. Switching back to Light updates without restarting. |
 
 ## 6. Optional
 

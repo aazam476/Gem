@@ -21,7 +21,12 @@ hooks; screens only call a hook and render what it returns. Current screenshots:
 
 ## Where to restyle
 
-1. `mobile/src/ui/theme.ts` — colors, spacing, radii, font sizes, touch target size.
+1. `mobile/src/ui/theme.ts` — colors (a `light` and a `dark` palette), spacing, radii, font sizes, touch target size.
+   Light/dark follows the system appearance (`app.json` `userInterfaceStyle: automatic`).
+   Read colors with `const { color } = useTheme()` inside components, never at module scope
+   (a `StyleSheet.create` color would be stuck in one mode). Every text token must stay
+   WCAG AA in both palettes; `src/__tests__/theme.test.tsx` checks it.
+   Camera chrome (status capsule, glass, scrim) is dark in both modes.
 2. `mobile/src/ui/primitives.tsx` — `Screen`, `AppText`, `Button`, `Card`, `Glass`, `Pill`, `SectionHeader`, `TextField`, `Toggle`, `Row`, `Spinner`.
    `mobile/src/ui/motion.ts` — curves, durations, springs (use these; don't invent values).
 3. Screen layout: `src/screens/assistant/AssistantScreen.tsx` (+ `StatusCapsule.tsx`, `AnswerSheet.tsx`), `src/screens/assistant/PermissionScreen.tsx`,
@@ -132,4 +137,5 @@ exactly what to reconnect. Then run the HUMAN_TESTS "UI smoke" section on a phon
 
 Screenshots (web preview with a fake camera): `screenshots/gem-listening.png` (web shows the
 mic error card), `screenshots/gem-paused.png`, `screenshots/gem-answer.png`,
-`screenshots/gem-answer-earlier.png`, `screenshots/portal.png`.
+`screenshots/gem-answer-earlier.png`, `screenshots/portal.png`; dark mode:
+`screenshots/gem-answer-dark.png`, `screenshots/portal-dark.png`.
