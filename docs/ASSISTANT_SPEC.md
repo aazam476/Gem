@@ -86,11 +86,12 @@ mic: AudioStream 16 kHz PCM → VAD
   ~1 s silence  → utterance (WAV)
   POST /sessions/{id}/turns {audio} ────────────▶ all remembered frames + history + audio ─▶ gemini-3.8-flash (JSON)
                                                   ◀──── {transcript, is_request, answer, frame_id, annotations[]}
+                                                  start ElevenLabs in the background ─────▶ eleven_flash_v2_5
                                                   draw boxes on frame_id (may be from minutes ago)
   ◀──────────────────────────────────────────── {answer, image_url, audio_url, transcript}
 show image + text box
 mic stream STOPPED, audio session → playback (loudspeaker)
-  download GET …/turns/{t}/speech ──────────────▶ first time: ElevenLabs (whole MP3) ──▶ eleven_flash_v2_5
+  download GET …/turns/{t}/speech ──────────────▶ waits for that synthesis (whole MP3)
   to a cache file, play it                        cached in RAM per turn
 "Read it again" → same local file + player (no request); a re-download hits the RAM cache (no ElevenLabs call)
 playback finished (or watchdog) → audio session → record, mic stream restarted

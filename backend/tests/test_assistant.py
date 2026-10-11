@@ -6,6 +6,7 @@ import asyncio
 import base64
 import io
 import json
+import time
 from typing import Any
 
 import httpx
@@ -281,28 +282,58 @@ def voice_counting(calls: list[int], status: int = 200) -> ElevenLabsVoice:
     return ElevenLabsVoice(settings, transport=httpx.MockTransport(handler))
 
 
+def wait_for(cond, timeout_s: float = 2.0) -> bool:
+    deadline = time.monotonic() + timeout_s
+    while not cond():
+        if time.monotonic() > deadline:
+            return False
+        time.sleep(0.01)
+    return True
+
+
+# These use `with` so the app keeps one event loop: the synthesis task started by the
+# turn must outlive that request, as it does under uvicorn.
+def test_speech_starts_when_the_answer_exists(tmp_path) -> None:
+    calls: list[int] = []
+    with make(tmp_path, brain=ScriptedBrain(), voice=voice_counting(calls)) as c:
+        sid = new_session(c)
+        c.post(f"/sessions/{sid}/turns", json={"text": "hi"}).json()
+        assert wait_for(lambda: len(calls) == 1)  # before the phone asks for /speech
+
+
+def test_ignored_speech_makes_no_voice(tmp_path) -> None:
+    calls: list[int] = []
+    brain = ScriptedBrain(BrainReply("hmm", False, "", (), None))
+    with make(tmp_path, brain=brain, voice=voice_counting(calls)) as c:
+        sid = new_session(c)
+        assert c.post(f"/sessions/{sid}/turns", json={"text": "hmm"}).json()["status"] == "ignored"
+        time.sleep(0.1)
+        assert calls == []
+
+
 def test_speech_is_synthesized_once_then_served_from_ram(tmp_path) -> None:
     calls: list[int] = []
-    c = make(tmp_path, brain=ScriptedBrain(), voice=voice_counting(calls))
-    sid = new_session(c)
-    turn = c.post(f"/sessions/{sid}/turns", json={"text": "hi"}).json()
-    first = c.get(turn["audio_url"])
-    again = c.get(turn["audio_url"])
-    assert first.status_code == again.status_code == 200
-    assert first.content == again.content and first.content.startswith(b"ID3")
-    assert first.headers["content-length"] == str(len(first.content))  # whole file, not chunked
-    assert first.headers["x-gem-audio-cache"] == "miss" and again.headers["x-gem-audio-cache"] == "hit"
-    assert len(calls) == 1
+    with make(tmp_path, brain=ScriptedBrain(), voice=voice_counting(calls)) as c:
+        sid = new_session(c)
+        turn = c.post(f"/sessions/{sid}/turns", json={"text": "hi"}).json()
+        first = c.get(turn["audio_url"])
+        again = c.get(turn["audio_url"])
+        assert first.status_code == again.status_code == 200
+        assert first.content == again.content and first.content.startswith(b"ID3")
+        assert first.headers["content-length"] == str(len(first.content))  # whole file, not chunked
+        assert again.headers["x-gem-audio-cache"] == "hit"
+        assert len(calls) == 1  # the early synthesis is reused, never repeated
 
 
-def test_speech_failure_502_and_not_cached(tmp_path) -> None:
+def test_speech_failure_502_and_retried(tmp_path) -> None:
     calls: list[int] = []
-    c = make(tmp_path, brain=ScriptedBrain(), voice=voice_counting(calls, status=401))
-    sid = new_session(c)
-    turn = c.post(f"/sessions/{sid}/turns", json={"text": "hi"}).json()
-    assert c.get(turn["audio_url"]).status_code == 502
-    assert c.get(turn["audio_url"]).status_code == 502
-    assert len(calls) == 2
+    with make(tmp_path, brain=ScriptedBrain(), voice=voice_counting(calls, status=401)) as c:
+        sid = new_session(c)
+        turn = c.post(f"/sessions/{sid}/turns", json={"text": "hi"}).json()
+        assert wait_for(lambda: len(calls) == 1)  # the early attempt fails quietly
+        assert c.get(turn["audio_url"]).status_code == 502
+        assert c.get(turn["audio_url"]).status_code == 502
+        assert len(calls) == 3  # each request retries a failed synthesis
 
 
 def test_speech_disabled_404(tmp_path) -> None:

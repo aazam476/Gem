@@ -52,7 +52,9 @@ class Turn:
     image_height: int
     created_at: float
     audio: bytes | None = None
-    audio_ready: asyncio.Event | None = None  # set while a first synthesis is streaming
+    # ElevenLabs synthesis started as soon as the answer existed; resolves to the MP3, or
+    # None if it failed (the speech endpoint then retries).
+    audio_task: asyncio.Task[bytes | None] | None = None
 
 
 @dataclass

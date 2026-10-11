@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import base64
 import binascii
-import contextlib
 import logging
 import time
 import uuid
@@ -243,6 +242,10 @@ def build_router(
                                frame_id=None, frame_age_s=None,
                                audio_url=None, frames_used=len(frames), latency_ms=latency_ms)
 
+            # Start Gem's voice now, so it is being made while the image is drawn and the
+            # answer travels to the phone (which then fetches /speech).
+            audio_task = start_synthesis(reply.answer, turn_id) if voice is not None else None
+
             image_jpeg, w, h = (None, 0, 0)
             shown = next((f for f in frames if f.frame_id == reply.frame_id), frames[-1] if frames else None)
             if shown is not None:
@@ -262,7 +265,7 @@ def build_router(
             store.add_turn(s, Turn(
                 turn_id=turn_id, status="answered", transcript=reply.transcript, answer=reply.answer,
                 annotations=[a.as_dict() for a in reply.annotations], image_jpeg=image_jpeg,
-                image_width=w, image_height=h, created_at=store.now(),
+                image_width=w, image_height=h, created_at=store.now(), audio_task=audio_task,
             ))
             base = f"/sessions/{session_id}/turns/{turn_id}"
             return TurnOut(
@@ -274,6 +277,19 @@ def build_router(
                 audio_url=f"{base}/speech" if voice is not None else None,
                 frames_used=len(frames), latency_ms=latency_ms,
             )
+
+    async def synthesize(text: str, turn_id: str) -> bytes | None:
+        assert voice is not None
+        try:
+            audio = await voice.synthesize(text)
+        except VoiceError as exc:
+            log.warning("voice failed for turn %s: %s", turn_id, exc)
+            return None
+        log.info("voice: %d bytes of ElevenLabs audio for turn %s", len(audio), turn_id)
+        return audio
+
+    def start_synthesis(text: str, turn_id: str) -> asyncio.Task[bytes | None]:
+        return asyncio.create_task(synthesize(text, turn_id))
 
     def load_turn(session_id: str, turn_id: str) -> Turn | JSONResponse:
         s = load(session_id)
@@ -295,11 +311,13 @@ def build_router(
 
     @router.get("/{session_id}/turns/{turn_id}/speech")
     async def turn_speech(session_id: str, turn_id: str) -> Any:
-        """ElevenLabs MP3 for an answer, synthesized at most once per turn and kept in RAM.
+        """ElevenLabs MP3 for an answer, synthesized once per turn and kept in RAM.
 
-        Returned whole with a Content-Length (not chunked): iOS's player is unreliable with
-        length-less streams, and the phone downloads the file before playing it anyway.
-        Concurrent first requests wait for the same synthesis."""
+        Synthesis starts when the turn is answered (not when this is requested), so this
+        usually only waits for the rest of it. Concurrent requests share that synthesis; a
+        failed one is retried here. Returned whole with a Content-Length (not chunked): iOS's
+        player is unreliable with length-less streams, and the phone downloads the file
+        before playing it anyway."""
         if voice is None:
             return _error(404, "voice_disabled", "ElevenLabs is not configured; use on-device speech.")
         turn = load_turn(session_id, turn_id)
@@ -307,21 +325,14 @@ def build_router(
             return turn
         cache = "hit"
         if turn.audio is None:
-            if turn.audio_ready is not None:  # another request is synthesizing it right now
-                with contextlib.suppress(TimeoutError):
-                    await asyncio.wait_for(turn.audio_ready.wait(), timeout=30)
+            cache = "miss"
+            task = turn.audio_task
+            if task is None or (task.done() and (task.cancelled() or task.result() is None)):
+                task = turn.audio_task = start_synthesis(turn.answer, turn_id)  # first try or retry
+            # shield: a phone that disconnects must not cancel the synthesis others wait for
+            turn.audio = await asyncio.shield(task)
             if turn.audio is None:
-                cache = "miss"
-                turn.audio_ready = asyncio.Event()
-                try:
-                    turn.audio = await voice.synthesize(turn.answer)
-                    log.info("voice: %d bytes of ElevenLabs audio for turn %s", len(turn.audio), turn_id)
-                except VoiceError as exc:
-                    log.warning("voice failed for turn %s: %s", turn_id, exc)
-                    return _error(502, "voice_unavailable", "Speech synthesis failed.")
-                finally:
-                    turn.audio_ready.set()
-                    turn.audio_ready = None
+                return _error(502, "voice_unavailable", "Speech synthesis failed.")
         return Response(turn.audio, media_type="audio/mpeg",
                         headers={"X-Gem-Audio-Cache": cache, "Cache-Control": "private, max-age=600"})
 

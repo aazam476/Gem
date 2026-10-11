@@ -200,9 +200,11 @@ tiny boxes drawn as rings). Kept in RAM for the last 10 answers.
 ### `GET /sessions/{id}/turns/{turn_id}/speech` → 200 `audio/mpeg`
 ElevenLabs `eleven_flash_v2_5` of `answer`, returned whole with `Content-Length` (not
 chunked — iOS's player is unreliable with length-less streams; the app downloads the file
-and plays it locally). First request synthesizes and caches it (`X-Gem-Audio-Cache: miss`);
-later requests return the cached bytes (`hit`) — ElevenLabs is billed once per answer.
-Concurrent first requests wait for the same synthesis.
+and plays it locally). Synthesis starts on the server as soon as the turn is answered (before
+this is requested), so the first request only waits for the rest of it (`X-Gem-Audio-Cache:
+miss`); later requests return the cached bytes (`hit`) — ElevenLabs is billed once per answer.
+Concurrent requests share the same synthesis; if it failed, the next request retries (502
+`voice_unavailable` if that fails too).
 
 ## Assistant settings (portal)
 
