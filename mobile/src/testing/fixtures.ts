@@ -40,6 +40,8 @@ export function turn(overrides: Partial<TurnOut> = {}): TurnOut {
     image_url: '/sessions/s-1/turns/t-1/image',
     image_width: 768,
     image_height: 576,
+    frame_id: 12,
+    frame_age_s: 0.4,
     audio_url: null,
     frames_used: 3,
     latency_ms: 1200,

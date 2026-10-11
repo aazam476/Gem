@@ -1,5 +1,6 @@
 import {
   assistantReducer,
+  frameAgeLabel,
   canSendTurn,
   initialAssistantState,
   isMicMuted,
@@ -9,7 +10,7 @@ import {
 
 const answer = {
   turnId: 't', transcript: 'what is this', answer: 'A cuff.', imageUri: 'http://x/img',
-  imageWidth: 768, imageHeight: 576, audioUrl: null,
+  imageWidth: 768, imageHeight: 576, frameAgeS: 0, audioUrl: null,
 };
 
 const run = (...events: AssistantEvent[]): AssistantState => events.reduce(assistantReducer, initialAssistantState);
@@ -75,5 +76,17 @@ describe('assistantReducer', () => {
 
   it('session failure is an error', () => {
     expect(run({ type: 'SESSION_FAILED', message: 'down' })).toMatchObject({ phase: 'error', error: 'down' });
+  });
+});
+
+describe('frameAgeLabel', () => {
+  it('labels only earlier frames', () => {
+    expect(frameAgeLabel(null)).toBeNull();
+    expect(frameAgeLabel(2)).toBeNull();
+    expect(frameAgeLabel(58.4)).toBe('Seen 58 seconds ago');
+    expect(frameAgeLabel(100)).toBe('Seen 2 minutes ago');
+    expect(frameAgeLabel(60 * 1.2 + 20)).toBe('Seen 2 minutes ago');
+    expect(frameAgeLabel(91)).toBe('Seen 2 minutes ago');
+    expect(frameAgeLabel(85)).toBe('Seen 85 seconds ago');
   });
 });

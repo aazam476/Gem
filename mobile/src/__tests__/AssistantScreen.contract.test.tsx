@@ -23,7 +23,7 @@ const usePermissions = jest.requireMock('../hooks/usePermissions').usePermission
 const metrics = { frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } };
 const answer = {
   turnId: 't', transcript: 'where is the start button', answer: 'It is the blue button.',
-  imageUri: 'http://api/img.jpg', imageWidth: 768, imageHeight: 576, audioUrl: null,
+  imageUri: 'http://api/img.jpg', imageWidth: 768, imageHeight: 576, frameAgeS: 0.4, audioUrl: null,
 };
 
 function controller(state: Partial<AssistantState> = {}, extra: Partial<AssistantController> = {}): AssistantController {
@@ -34,7 +34,7 @@ function controller(state: Partial<AssistantState> = {}, extra: Partial<Assistan
     cameraReady: true,
     micActive: true,
     micError: null,
-    frames: { sent: 12, failed: 0, lastChangeScore: 0.08 },
+    frames: { sent: 12, failed: 0, lastChangeScore: 0.08, remembered: 7 },
     dismiss: jest.fn(),
     replay: jest.fn(),
     retry: jest.fn(),
@@ -73,7 +73,7 @@ describe('AssistantScreen contract', () => {
     expect(screen.getByTestId('assistant-camera')).toBeTruthy();
     expect(screen.getByTestId('assistant-status')).toHaveTextContent(new RegExp(text));
     expect(screen.getByTestId('assistant-mic')).toHaveTextContent(/Mic on/);
-    expect(screen.getByTestId('assistant-frames')).toHaveTextContent(/Frames sent: 12/);
+    expect(screen.getByTestId('assistant-frames')).toHaveTextContent(/Frames sent: 12 · remembered: 7/);
     expect(screen.queryByTestId('assistant-thinking') !== null).toBe(phase === 'thinking');
   });
 
@@ -125,6 +125,16 @@ describe('AssistantScreen contract', () => {
     await fireEvent.press(screen.getByTestId('assistant-dismiss'));
     expect(ctl.replay).toHaveBeenCalledTimes(1);
     expect(ctl.dismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it('answer drawn on an earlier frame says when it was seen', async () => {
+    await renderAssistant({ answer: { ...answer, frameAgeS: 58 } });
+    expect(screen.getByTestId('assistant-answer-age')).toHaveTextContent('Seen 58 seconds ago');
+  });
+
+  it('no age label for the current view', async () => {
+    await renderAssistant({ answer });
+    expect(screen.queryByTestId('assistant-answer-age')).toBeNull();
   });
 
   it('answer without an image still shows the text', async () => {

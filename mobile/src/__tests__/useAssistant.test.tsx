@@ -38,7 +38,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   n = 0;
   createSession.mockImplementation(async () => ({ session_id: `s-${++n}` }));
-  sendFrame.mockResolvedValue({ frames_buffered: 1, frames_received: 1, change_score: 0.12, expires_in_s: 600 });
+  sendFrame.mockResolvedValue({ frames_buffered: 1, frames_received: 1, kept: true, change_score: 0.12, expires_in_s: 600 });
 });
 
 async function setup() {
@@ -74,7 +74,7 @@ describe('useAssistant', () => {
       expect(takePictureAsync).toHaveBeenCalledTimes(3);
       expect(sendFrame).toHaveBeenCalledTimes(3);
       expect(sendFrame.mock.calls[0]).toEqual(['s-1', 'QUJD']);
-      expect(hook.result.current.frames).toMatchObject({ sent: 3, lastChangeScore: 0.12 });
+      expect(hook.result.current.frames).toMatchObject({ sent: 3, lastChangeScore: 0.12, remembered: 1 });
     } finally {
       jest.useRealTimers();
     }
@@ -95,6 +95,7 @@ describe('useAssistant', () => {
       turnId: 't-1',
       answer: 'It is the blue button at the bottom.',
       imageUri: expect.stringMatching(/\/sessions\/s-1\/turns\/t-1\/image$/),
+      frameAgeS: 0.4,
     });
     expect(Speech.speak).toHaveBeenCalledWith('It is the blue button at the bottom.', expect.anything());
   });

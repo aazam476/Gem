@@ -147,6 +147,7 @@ export function useAssistant(): AssistantController {
               imageUri: out.image_url ? absoluteUrl(out.image_url) : null,
               imageWidth: out.image_width,
               imageHeight: out.image_height,
+              frameAgeS: out.frame_age_s,
               audioUrl: out.audio_url,
             },
           });

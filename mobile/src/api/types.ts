@@ -137,6 +137,8 @@ export interface Health {
 export interface AssistantSession {
   session_id: string;
   idle_timeout_s: number;
+  /** How far back Gem's visual memory reaches, in seconds. */
+  memory_s: number;
   expires_in_s: number;
   frame_interval_ms: number;
   frames_buffered: number;
@@ -146,7 +148,10 @@ export interface AssistantSession {
 }
 
 export interface FrameAck {
+  /** Frames currently in Gem's visual memory. */
   frames_buffered: number;
+  /** False when the scene had not changed since the last kept frame. */
+  kept: boolean;
   frames_received: number;
   /** 0 = same as previous frame, 1 = completely different; null for the first frame. */
   change_score: number | null;
@@ -164,6 +169,9 @@ export interface TurnOut {
   image_url: string | null;
   image_width: number;
   image_height: number;
+  /** Memory frame shown in the image (may be from earlier, e.g. "where's my backpack?"). */
+  frame_id: number | null;
+  frame_age_s: number | null;
   audio_url: string | null;
   frames_used: number;
   latency_ms: number;

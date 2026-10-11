@@ -11,6 +11,8 @@ export interface FrameStats {
   sent: number;
   failed: number;
   lastChangeScore: number | null;
+  /** Frames in Gem's visual memory (unchanged scenes aren't stored). */
+  remembered: number;
 }
 
 export function useFrameStreamer(
@@ -18,7 +20,7 @@ export function useFrameStreamer(
   tick: () => Promise<FrameAck | null>,
   intervalMs: number = FRAME_INTERVAL_MS,
 ): FrameStats {
-  const [stats, setStats] = useState<FrameStats>({ sent: 0, failed: 0, lastChangeScore: null });
+  const [stats, setStats] = useState<FrameStats>({ sent: 0, failed: 0, lastChangeScore: null, remembered: 0 });
   const busy = useRef(false);
   const tickRef = useRef(tick);
 
@@ -36,7 +38,7 @@ export function useFrameStreamer(
         .current()
         .then((ack) => {
           if (alive && ack) {
-            setStats((s) => ({ ...s, sent: s.sent + 1, lastChangeScore: ack.change_score }));
+            setStats((s) => ({ ...s, sent: s.sent + 1, lastChangeScore: ack.change_score, remembered: ack.frames_buffered }));
           }
         })
         .catch(() => {

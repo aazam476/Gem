@@ -8,7 +8,7 @@ import { Image, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useAssistant } from '../../hooks/useAssistant';
-import type { AssistantPhase } from '../../logic/assistantState';
+import { frameAgeLabel, type AssistantPhase } from '../../logic/assistantState';
 import { AppText, Button, Row, Spinner } from '../../ui/primitives';
 import { theme } from '../../ui/theme';
 
@@ -46,7 +46,7 @@ export function AssistantScreen() {
               {micError ? `Microphone error: ${micError}` : micActive ? 'Mic on' : 'Mic off'}
             </AppText>
             <AppText variant="small" tone="inverse" testID="assistant-frames">
-              {`Frames sent: ${frames.sent}${frames.lastChangeScore !== null ? ` · change ${frames.lastChangeScore.toFixed(2)}` : ''}`}
+              {`Frames sent: ${frames.sent} · remembered: ${frames.remembered}${frames.lastChangeScore !== null ? ` · change ${frames.lastChangeScore.toFixed(2)}` : ''}`}
             </AppText>
             {state.lastTranscript ? (
               <AppText variant="body" tone="inverse" testID="assistant-heard">{`You said: “${state.lastTranscript}”`}</AppText>
@@ -104,6 +104,11 @@ export function AssistantScreen() {
           testID="assistant-answer"
           style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.92)', padding: theme.space.md }]}
         >
+          {frameAgeLabel(state.answer.frameAgeS) ? (
+            <AppText variant="patient" tone="inverse" testID="assistant-answer-age">
+              {frameAgeLabel(state.answer.frameAgeS)}
+            </AppText>
+          ) : null}
           {state.answer.imageUri ? (
             <Image
               testID="assistant-answer-image"

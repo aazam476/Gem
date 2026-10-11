@@ -10,7 +10,17 @@ export interface AssistantAnswer {
   imageUri: string | null;
   imageWidth: number;
   imageHeight: number;
+  /** Seconds between when the shown frame was taken and the question (0 = current view). */
+  frameAgeS: number | null;
   audioUrl: string | null;
+}
+
+/** "Seen 58 seconds ago" for answers drawn on an earlier frame; null for the current view. */
+export function frameAgeLabel(ageS: number | null): string | null {
+  if (ageS === null || ageS < 5) return null;
+  if (ageS < 90) return `Seen ${Math.round(ageS)} seconds ago`;
+  const min = Math.round(ageS / 60);
+  return `Seen ${min} minute${min === 1 ? '' : 's'} ago`;
 }
 
 export type AssistantPhase =
