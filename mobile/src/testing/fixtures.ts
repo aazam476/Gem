@@ -1,4 +1,4 @@
-import type { CaptureOut, ClinicalEvent, Protocol } from '../api/types';
+import type { ClinicalEvent, Protocol, TurnOut } from '../api/types';
 
 export const protocol: Protocol = {
   protocol_id: 'p-1',
@@ -16,26 +16,6 @@ export const protocol: Protocol = {
   created_at: '2026-10-11T00:00:00Z',
 };
 
-export function capture(overrides: Partial<CaptureOut> = {}): CaptureOut {
-  return {
-    capture_id: 'c-1',
-    status: 'needs_confirmation',
-    reason: null,
-    bounding_box: [280, 220, 720, 780],
-    image_width: 768,
-    image_height: 1024,
-    readings: { systolic: 142, diastolic: 90 },
-    flags: [],
-    errors: [],
-    voice_line_id: null,
-    voice_script: 'I read 142 over 90. Is that right?',
-    audio_url: null,
-    ai_latency_ms: 900,
-    validation_ns: 2100,
-    ...overrides,
-  };
-}
-
 export const event: ClinicalEvent = {
   event_id: 'e-1',
   protocol_id: 'p-1',
@@ -49,3 +29,20 @@ export const event: ClinicalEvent = {
   validation_ns: 2100,
   timestamp: '2026-10-11T00:00:00Z',
 };
+
+export function turn(overrides: Partial<TurnOut> = {}): TurnOut {
+  return {
+    turn_id: 't-1',
+    status: 'answered',
+    transcript: 'where is the start button',
+    answer: 'It is the blue button at the bottom.',
+    annotations: [{ label: 'start', box_2d: [700, 400, 900, 600] }],
+    image_url: '/sessions/s-1/turns/t-1/image',
+    image_width: 768,
+    image_height: 576,
+    audio_url: null,
+    frames_used: 3,
+    latency_ms: 1200,
+    ...overrides,
+  };
+}

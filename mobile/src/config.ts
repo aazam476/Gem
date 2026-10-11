@@ -20,3 +20,16 @@ export const AUDIO_START_TIMEOUT_MS = 3_000;
 /** Frames are downscaled by their long edge before upload (aspect ratio preserved). */
 export const UPLOAD_LONG_EDGE_PX = 768;
 export const UPLOAD_JPEG_QUALITY = 0.7;
+
+// -- Gem assistant --------------------------------------------------------------
+/** One camera frame per second goes to the session's context window. */
+export const FRAME_INTERVAL_MS = 1_000;
+export const FRAME_LONG_EDGE_PX = 768;
+export const FRAME_JPEG_QUALITY = 0.6;
+export const FRAME_TIMEOUT_MS = 5_000;
+/** Gemini budget is 20 s server-side; leave room for upload. */
+export const TURN_TIMEOUT_MS = 30_000;
+/** Microphone capture rate requested from expo-audio; resampled to 16 kHz if different. */
+export const MIC_SAMPLE_RATE = 16_000;
+/** Answer audio players kept in RAM for instant replays. */
+export const ANSWER_AUDIO_CACHE_SIZE = 5;

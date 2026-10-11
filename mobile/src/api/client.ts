@@ -1,5 +1,9 @@
-import { API_URL, ANALYZE_TIMEOUT_MS, DEFAULT_TIMEOUT_MS } from '../config';
+import { API_URL, ANALYZE_TIMEOUT_MS, DEFAULT_TIMEOUT_MS, FRAME_TIMEOUT_MS, TURN_TIMEOUT_MS } from '../config';
 import type {
+  AssistantSession,
+  FrameAck,
+  TurnInput,
+  TurnOut,
   CaptureOut,
   ClinicalEvent,
   ErrorBody,
@@ -50,7 +54,7 @@ export function absoluteUrl(path: string): string {
 }
 
 async function request<T>(
-  method: 'GET' | 'POST',
+  method: 'GET' | 'POST' | 'DELETE',
   path: string,
   body?: unknown,
   timeoutMs: number = DEFAULT_TIMEOUT_MS,
@@ -118,6 +122,19 @@ export const api = {
       'POST',
       `/captures/${encodeURIComponent(captureId)}/discard`,
     ),
+
+  // Gem assistant
+  createSession: () => request<AssistantSession>('POST', '/sessions', {}),
+  endSession: (id: string) => request<null>('DELETE', `/sessions/${encodeURIComponent(id)}`),
+  sendFrame: (id: string, imageBase64: string) =>
+    request<FrameAck>('POST', `/sessions/${encodeURIComponent(id)}/frames`, { image_base64: imageBase64 }, FRAME_TIMEOUT_MS),
+  sendTurn: (id: string, input: TurnInput) =>
+    request<TurnOut>('POST', `/sessions/${encodeURIComponent(id)}/turns`, input, TURN_TIMEOUT_MS),
 };
+
+/** The session is gone (timed out after 10 idle minutes, or the server restarted). */
+export function isSessionGone(err: unknown): boolean {
+  return err instanceof ApiError && (err.code === 'session_expired' || err.code === 'session_not_found');
+}
 
 export type Api = typeof api;

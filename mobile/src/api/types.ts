@@ -131,3 +131,40 @@ export interface Health {
   gemini_model: string;
   active_protocol_id: string | null;
 }
+
+// -- Gem assistant (docs/API_CONTRACT.md §Assistant) --------------------------------
+
+export interface AssistantSession {
+  session_id: string;
+  idle_timeout_s: number;
+  expires_in_s: number;
+  frame_interval_ms: number;
+  frames_buffered: number;
+  frames_received: number;
+  turns: number;
+  study_context: boolean;
+}
+
+export interface FrameAck {
+  frames_buffered: number;
+  frames_received: number;
+  /** 0 = same as previous frame, 1 = completely different; null for the first frame. */
+  change_score: number | null;
+  expires_in_s: number;
+}
+
+export type TurnInput = { audio_base64: string; audio_mime: 'audio/wav' } | { text: string };
+
+export interface TurnOut {
+  turn_id: string;
+  status: 'answered' | 'ignored';
+  transcript: string;
+  answer: string;
+  annotations: { label: string; box_2d: [number, number, number, number] }[];
+  image_url: string | null;
+  image_width: number;
+  image_height: number;
+  audio_url: string | null;
+  frames_used: number;
+  latency_ms: number;
+}

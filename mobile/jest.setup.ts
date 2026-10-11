@@ -11,19 +11,27 @@ jest.mock('expo-camera', () => {
   });
   return {
     CameraView,
-    useCameraPermissions: jest.fn(() => [{ granted: true, canAskAgain: true }, jest.fn()]),
+    useCameraPermissions: jest.fn(() => [{ granted: true, canAskAgain: true }, jest.fn(), jest.fn()]),
   };
 });
 
-jest.mock('expo-audio', () => ({
-  createAudioPlayer: jest.fn(() => ({
-    play: jest.fn(),
-    remove: jest.fn(),
-    playing: false,
-    addListener: jest.fn(() => ({ remove: jest.fn() })),
-  })),
-  setAudioModeAsync: jest.fn(async () => undefined),
-}));
+jest.mock('expo-audio', () => {
+  const stream = { start: jest.fn(async () => undefined), stop: jest.fn() };
+  return {
+    createAudioPlayer: jest.fn(() => ({
+      play: jest.fn(),
+      pause: jest.fn(),
+      remove: jest.fn(),
+      seekTo: jest.fn(async () => undefined),
+      playing: false,
+      addListener: jest.fn(() => ({ remove: jest.fn() })),
+    })),
+    setAudioModeAsync: jest.fn(async () => undefined),
+    useAudioStream: jest.fn(() => ({ stream, isStreaming: false })),
+    getRecordingPermissionsAsync: jest.fn(async () => ({ granted: true, canAskAgain: true })),
+    requestRecordingPermissionsAsync: jest.fn(async () => ({ granted: true, canAskAgain: true })),
+  };
+});
 
 jest.mock('expo-speech', () => ({
   speak: jest.fn(),

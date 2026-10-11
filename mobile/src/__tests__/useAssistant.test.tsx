@@ -1,0 +1,183 @@
+import { act, renderHook, waitFor } from '@testing-library/react-native';
+import { createAudioPlayer } from 'expo-audio';
+import * as Speech from 'expo-speech';
+
+import { ApiError, NetworkError, api } from '../api/client';
+import { useAssistant } from '../hooks/useAssistant';
+import type { SpeechCaptureOptions } from '../hooks/useSpeechCapture';
+import { turn } from '../testing/fixtures';
+
+jest.mock('../api/client', () => {
+  const actual = jest.requireActual('../api/client');
+  return {
+    ...actual,
+    api: {
+      createSession: jest.fn(),
+      endSession: jest.fn(async () => null),
+      sendFrame: jest.fn(),
+      sendTurn: jest.fn(),
+    },
+  };
+});
+
+let mic: SpeechCaptureOptions;
+jest.mock('../hooks/useSpeechCapture', () => ({
+  useSpeechCapture: (o: SpeechCaptureOptions) => {
+    mic = o;
+    return { active: o.enabled, error: null };
+  },
+}));
+
+const createSession = api.createSession as jest.Mock;
+const sendFrame = api.sendFrame as jest.Mock;
+const sendTurn = api.sendTurn as jest.Mock;
+const gone = () => new ApiError(410, { error: 'session_expired', message: 'gone' });
+
+let n = 0;
+beforeEach(() => {
+  jest.clearAllMocks();
+  n = 0;
+  createSession.mockImplementation(async () => ({ session_id: `s-${++n}` }));
+  sendFrame.mockResolvedValue({ frames_buffered: 1, frames_received: 1, change_score: 0.12, expires_in_s: 600 });
+});
+
+async function setup() {
+  const hook = await renderHook(() => useAssistant());
+  await waitFor(() => expect(hook.result.current.state.phase).toBe('listening'));
+  return hook;
+}
+
+describe('useAssistant', () => {
+  it('opens a session and starts listening', async () => {
+    const { result } = await setup();
+    expect(createSession).toHaveBeenCalledTimes(1);
+    expect(mic.enabled).toBe(true);
+    expect(mic.muted).toBe(false);
+    expect(result.current.micActive).toBe(true);
+  });
+
+  it('streams one frame per second once the camera is ready', async () => {
+    jest.useFakeTimers();
+    try {
+      const hook = await renderHook(() => useAssistant());
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(10);
+      });
+      const takePictureAsync = jest.fn(async () => ({ uri: 'file://f.jpg', width: 3000, height: 4000 }));
+      await act(async () => {
+        hook.result.current.attachCamera({ takePictureAsync } as never);
+        hook.result.current.onCameraReady();
+      });
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(3050);
+      });
+      expect(takePictureAsync).toHaveBeenCalledTimes(3);
+      expect(sendFrame).toHaveBeenCalledTimes(3);
+      expect(sendFrame.mock.calls[0]).toEqual(['s-1', 'QUJD']);
+      expect(hook.result.current.frames).toMatchObject({ sent: 3, lastChangeScore: 0.12 });
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('sends a finished utterance as WAV, shows the answer and speaks it', async () => {
+    sendTurn.mockResolvedValue(turn());
+    const { result } = await setup();
+    await act(async () => mic.onSpeechStart());
+    expect(result.current.state.phase).toBe('hearing');
+    await act(async () => mic.onUtterance(new Int16Array(1600), 16000));
+    await waitFor(() => expect(result.current.state.answer).not.toBeNull());
+    const [sid, input] = sendTurn.mock.calls[0];
+    expect(sid).toBe('s-1');
+    expect(input.audio_mime).toBe('audio/wav');
+    expect(input.audio_base64.startsWith('UklGR')).toBe(true); // "RIFF"
+    expect(result.current.state.answer).toMatchObject({
+      turnId: 't-1',
+      answer: 'It is the blue button at the bottom.',
+      imageUri: expect.stringMatching(/\/sessions\/s-1\/turns\/t-1\/image$/),
+    });
+    expect(Speech.speak).toHaveBeenCalledWith('It is the blue button at the bottom.', expect.anything());
+  });
+
+  it('mutes the mic while waiting for Gemini and ignores a second prompt', async () => {
+    let resolve!: (v: unknown) => void;
+    sendTurn.mockReturnValue(new Promise((r) => (resolve = r)));
+    const { result } = await setup();
+    await act(async () => {
+      result.current.sendText('first');
+      result.current.sendText('second');
+    });
+    expect(sendTurn).toHaveBeenCalledTimes(1);
+    expect(mic.muted).toBe(true);
+    await act(async () => resolve(turn()));
+    await waitFor(() => expect(result.current.state.phase).toBe('listening'));
+  });
+
+  it('replays from the cached player without a new request', async () => {
+    const player = {
+      playing: false, play: jest.fn(), pause: jest.fn(), remove: jest.fn(), seekTo: jest.fn(async () => undefined),
+      addListener: jest.fn((_e: string, cb: (s: { playing: boolean; didJustFinish: boolean }) => void) => {
+        setTimeout(() => cb({ playing: true, didJustFinish: false }), 0);
+        return { remove: jest.fn() };
+      }),
+    };
+    (createAudioPlayer as jest.Mock).mockReturnValue(player);
+    sendTurn.mockResolvedValue(turn({ audio_url: '/sessions/s-1/turns/t-1/speech' }));
+    const { result } = await setup();
+    await act(async () => result.current.sendText('hi'));
+    await waitFor(() => expect(player.play).toHaveBeenCalledTimes(1));
+    await act(async () => result.current.replay());
+    await waitFor(() => expect(player.play).toHaveBeenCalledTimes(2));
+    expect(createAudioPlayer).toHaveBeenCalledTimes(1);
+  });
+
+  it('dismiss hides the answer', async () => {
+    sendTurn.mockResolvedValue(turn());
+    const { result } = await setup();
+    await act(async () => result.current.sendText('hi'));
+    await waitFor(() => expect(result.current.state.answer).not.toBeNull());
+    await act(async () => result.current.dismiss());
+    expect(result.current.state.answer).toBeNull();
+  });
+
+  it('ignored speech shows a notice only', async () => {
+    sendTurn.mockResolvedValue(turn({ status: 'ignored', answer: '', image_url: null }));
+    const { result } = await setup();
+    await act(async () => mic.onUtterance(new Int16Array(1600), 16000));
+    await waitFor(() => expect(result.current.state.notice).toBe("I didn't catch that."));
+    expect(result.current.state.answer).toBeNull();
+  });
+
+  it('opens a new session when the old one timed out (10 min idle) and retries', async () => {
+    sendTurn.mockRejectedValueOnce(gone()).mockResolvedValueOnce(turn());
+    const { result } = await setup();
+    await act(async () => result.current.sendText('hi'));
+    await waitFor(() => expect(result.current.state.answer).not.toBeNull());
+    expect(createSession).toHaveBeenCalledTimes(2);
+    expect(sendTurn.mock.calls.map((c) => c[0])).toEqual(['s-1', 's-2']);
+  });
+
+  it('network failure -> error state spoken on-device -> retry', async () => {
+    sendTurn.mockRejectedValue(new NetworkError('down', false));
+    const { result } = await setup();
+    await act(async () => result.current.sendText('hi'));
+    await waitFor(() => expect(result.current.state.phase).toBe('error'));
+    expect(Speech.speak).toHaveBeenCalledWith(expect.stringMatching(/trouble connecting/), expect.anything());
+    await act(async () => result.current.retry());
+    expect(result.current.state.phase).toBe('listening');
+  });
+
+  it('cannot start without the backend, then recovers on retry', async () => {
+    createSession.mockRejectedValueOnce(new NetworkError('down', false));
+    const hook = await renderHook(() => useAssistant());
+    await waitFor(() => expect(hook.result.current.state.phase).toBe('error'));
+    await act(async () => hook.result.current.retry());
+    await waitFor(() => expect(hook.result.current.state.phase).toBe('listening'));
+  });
+
+  it('ends the session on unmount', async () => {
+    const { unmount } = await setup();
+    await act(async () => unmount());
+    expect(api.endSession).toHaveBeenCalledWith('s-1');
+  });
+});
