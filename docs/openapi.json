@@ -1288,11 +1288,17 @@
         "properties": {
           "frames_buffered": {
             "type": "integer",
-            "title": "Frames Buffered"
+            "title": "Frames Buffered",
+            "description": "Frames in Gem's visual memory"
           },
           "frames_received": {
             "type": "integer",
             "title": "Frames Received"
+          },
+          "kept": {
+            "type": "boolean",
+            "title": "Kept",
+            "description": "False when the scene had not changed since the last kept frame"
           },
           "change_score": {
             "anyOf": [
@@ -1315,6 +1321,7 @@
         "required": [
           "frames_buffered",
           "frames_received",
+          "kept",
           "change_score",
           "expires_in_s"
         ],
@@ -1634,6 +1641,10 @@
             "type": "number",
             "title": "Idle Timeout S"
           },
+          "memory_s": {
+            "type": "number",
+            "title": "Memory S"
+          },
           "expires_in_s": {
             "type": "number",
             "title": "Expires In S"
@@ -1663,6 +1674,7 @@
         "required": [
           "session_id",
           "idle_timeout_s",
+          "memory_s",
           "expires_in_s",
           "frame_interval_ms",
           "frames_buffered",
@@ -1762,6 +1774,30 @@
             "type": "integer",
             "title": "Image Height"
           },
+          "frame_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Frame Id",
+            "description": "Memory frame the image shows / the boxes are on"
+          },
+          "frame_age_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Frame Age S",
+            "description": "How long before the question that frame was taken"
+          },
           "audio_url": {
             "anyOf": [
               {
@@ -1792,6 +1828,8 @@
           "image_url",
           "image_width",
           "image_height",
+          "frame_id",
+          "frame_age_s",
           "audio_url",
           "frames_used",
           "latency_ms"

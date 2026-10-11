@@ -35,7 +35,7 @@ cd mobile && npx expo start          # w = portal in browser; scan QR in Expo Go
 
 | # | Steps | Expected |
 |---|-------|----------|
-| 1.1 | `cd backend && GEM_LIVE_TESTS=1 .venv/bin/pytest tests/test_live.py -s` | 3 passed. Gemini reads the synthetic BP fixture (128/82) and the assistant test answers mentioning 128 with at least one box. "Model not found" → fix `GEMINI_MODEL` / `GEMINI_ASSISTANT_MODEL`. |
+| 1.1 | `cd backend && GEM_LIVE_TESTS=1 .venv/bin/pytest tests/test_live.py -s` | 4 passed (incl. recalling a monitor seen 60 s earlier). Gemini reads the synthetic BP fixture (128/82) and the assistant test answers mentioning 128 with at least one box. "Model not found" → fix `GEMINI_MODEL` / `GEMINI_ASSISTANT_MODEL`. |
 | 1.2 | `curl localhost:8000/health` | `"ai_mode":"gemini"`, `"voice_enabled":true` |
 
 ## 2. Gem assistant on a phone (Expo Go)
@@ -51,6 +51,8 @@ cd mobile && npx expo start          # w = portal in browser; scan QR in Expo Go
 | 2.7 | Tap "Read it again" twice. | Same voice plays again immediately. Backend log shows only one ElevenLabs request for that answer (second GET returns `X-Gem-Audio-Cache: hit` if a new player was needed). |
 | 2.8 | Tap "Dismiss". | Overlay closes, camera visible, still listening. |
 | 2.9 | Ask a follow-up that depends on context: "Which button starts it?" | Answer refers to the same device; the start button is marked. |
+| 2.9b | **Visual memory:** point at a backpack (or any distinct object) for 2–3 s, then point the camera elsewhere and move around for ~1 minute. Ask "Where did I leave my backpack?" | The answer image is the **earlier** frame with the backpack boxed, labelled "Seen about 60 seconds ago"; the spoken answer says roughly when/where. Note latency vs. 2.5. |
+| 2.9c | Same, but wait > 5 minutes before asking. | Gem says it doesn't remember / can't see it (memory window is 5 min). |
 | 2.10 | Have someone talk nearby / play a TV, without addressing Gem. | Mostly nothing happens or "I didn't catch that." — no spoken answer. |
 | 2.11 | Quiet room vs. noisy room (fan, kitchen). Ask a question in each. | End of speech is detected in both; no endless "Hearing you…". If it triggers on noise or cuts you off, note the room and phone model (tune `src/logic/vad.ts` thresholds). |
 | 2.12 | Type "Where is the start button?" in the text box and Send. | Same answer flow without speaking. |

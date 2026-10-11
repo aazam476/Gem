@@ -58,7 +58,8 @@ needs a human (see HUMAN_TESTS.md).
 - [x] `POST /sessions/{id}/frames` (1 fps, change score), `POST …/turns` (WAV or text), `GET …/image`, `GET …/speech` (RAM cache)
 - [x] Gem system prompt + JSON schema + strict parsing; boxes drawn server-side; mock brain
 - [x] App: permission gate, full-screen camera, 1 fps frames, AudioStream + VAD, answer overlay, replay/dismiss, typed fallback, session recovery
-- [x] Tests: backend 38 new; mobile VAD/WAV/state/audio-cache/hook/contract tests; web run with fake camera
+- [x] Visual memory (5 min of changed frames, all sent per question, answer drawn on the chosen earlier frame)
+- [x] Tests: backend 43 new; mobile VAD/WAV/state/audio-cache/hook/contract tests; web run with fake camera
 - [ ] 👤 Phone run: HUMAN_TESTS §2–§4 (mic + VAD + ElevenLabs + real Gemini are untested by the agent)
 - **Check:** `./scripts/check.sh`
 

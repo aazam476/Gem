@@ -79,12 +79,13 @@ Always present: `assistant-screen` (root), `assistant-camera` (full-screen `Came
 |-----------|------------------|------|---------|
 | `state.phase` | `assistant-status` text: starting → "Starting…", listening → "Listening…", hearing → "Hearing you…", thinking → "Thinking…", error → "Connection problem"; "Speaking…" whenever `state.speaking` | | |
 | mic | `assistant-mic` | `micActive`, `micError` (shown verbatim; on web it explains to type instead) | |
-| frames | `assistant-frames` | `frames.sent`, `frames.lastChangeScore` (diagnostic; may be visually de-emphasized) | |
+| frames | `assistant-frames` | `frames.sent`, `frames.remembered`, `frames.lastChangeScore` (diagnostic; may be visually de-emphasized) | |
 | `state.lastTranscript` | `assistant-heard` | "You said: …" | |
 | `state.notice` | `assistant-notice` | e.g. "I didn't catch that." | |
 | `phase === 'thinking'` | `assistant-thinking` | progress indicator | |
 | `phase === 'error'` | `assistant-error`, `assistant-retry` | `state.error` | `retry` |
 | typed question | `assistant-text-input`, `assistant-send` | | `sendText(text)` then clear; send disabled while empty/thinking/starting |
+| `state.answer` older frame | `assistant-answer-age` (only when `frameAgeLabel(answer.frameAgeS)` is non-null) | "Seen 58 seconds ago" — the photo is NOT the current view | |
 | `state.answer` | `assistant-answer` (full-screen overlay), `assistant-answer-image` (only if `imageUri`), `assistant-answer-box` (scrollable text box), `assistant-answer-text`, `assistant-replay`, `assistant-dismiss` | `answer.imageUri` (show with `resizeMode="contain"` — the drawing is baked into the image), `answer.answer` | `replay`, `dismiss` |
 
 Constraints specific to this screen:

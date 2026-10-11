@@ -149,7 +149,7 @@ a prompt. Spec: [ASSISTANT_SPEC.md](ASSISTANT_SPEC.md).
 ### `POST /sessions` → 201 `Session`
 Body optional: `{"patient_id": "patient-demo-001"}`.
 ```json
-{"session_id": "uuid", "idle_timeout_s": 600, "expires_in_s": 600, "frame_interval_ms": 1000,
+{"session_id": "uuid", "idle_timeout_s": 600, "memory_s": 300, "expires_in_s": 600, "frame_interval_ms": 1000,
  "frames_buffered": 0, "frames_received": 0, "turns": 0, "study_context": true}
 ```
 `study_context` is true when a protocol was active at creation (its text is given to Gemini).
@@ -160,8 +160,10 @@ Reading does not extend the idle timeout.
 ### `POST /sessions/{id}/frames` → 200
 Request `{"image_base64": "<jpeg>"}` (≤ 3 MB decoded; downscaled to 768 px long edge). Counts as activity.
 ```json
-{"frames_buffered": 10, "frames_received": 57, "change_score": 0.08, "expires_in_s": 600}
+{"frames_buffered": 23, "frames_received": 57, "kept": true, "change_score": 0.08, "expires_in_s": 600}
 ```
+`frames_buffered` = frames in Gem's visual memory (last `memory_s`). `kept` is false when the
+scene hadn't changed since the last kept frame (one is still kept every 30 s).
 `change_score`: mean absolute difference vs. the previous frame on 32×32 grayscale, 0–1;
 `null` for the first frame. (Input for the planned inactivity detector.)
 
@@ -170,21 +172,22 @@ Exactly one of:
 - `{"audio_base64": "<wav>", "audio_mime": "audio/wav"}` — the user's utterance (16 kHz mono PCM WAV from the app; `audio/mp3|mpeg|aac|ogg|flac|mp4` also accepted)
 - `{"text": "Where is the start button?"}` — typed question
 
-Counts as activity. The newest `GEM_FRAMES_PER_TURN` (3) frames, the history and the input go to Gemini.
+Counts as activity. **All remembered frames** (oldest first, labelled with id and age), the history and the input go to Gemini.
 ```json
 {"turn_id": "uuid",
  "status": "answered" | "ignored",          // ignored = no speech / not addressed to Gem
  "transcript": "where is the start button",
  "answer": "It's the round blue button below the screen. I've marked it.",
- "annotations": [{"label": "start button", "box_2d": [785, 470, 865, 530]}],  // [ymin,xmin,ymax,xmax] 0-1000 on the newest frame
+ "annotations": [{"label": "start button", "box_2d": [785, 470, 865, 530]}],  // [ymin,xmin,ymax,xmax] 0-1000 on frame_id
  "image_url": "/sessions/{id}/turns/{turn_id}/image" | null,                     // null when no frames / ignored
  "image_width": 768, "image_height": 576,
+ "frame_id": 42, "frame_age_s": 58.3,        // the frame shown; > 0 when Gem points at something seen earlier
  "audio_url": "/sessions/{id}/turns/{turn_id}/speech" | null,                    // null without ElevenLabs
  "frames_used": 3, "latency_ms": 1840.2}
 ```
 
 ### `GET /sessions/{id}/turns/{turn_id}/image` → 200 `image/jpeg`
-The newest frame at question time with the annotations drawn (yellow boxes, black labels;
+Frame `frame_id` (the current view, or an earlier one) with the annotations drawn (yellow boxes, black labels;
 tiny boxes drawn as rings). Kept in RAM for the last 10 answers.
 
 ### `GET /sessions/{id}/turns/{turn_id}/speech` → 200 `audio/mpeg`

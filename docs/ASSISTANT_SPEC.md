@@ -17,7 +17,7 @@ uses them.
 | 1 | Check camera + mic permissions; screen saying both are required | `hooks/usePermissions.ts`, `screens/assistant/PermissionScreen.tsx`, `GemRoot.tsx` |
 | 2 | Full-screen camera; mic always on with speech-to-text | `AssistantScreen.tsx` (`expo-camera`), `hooks/useSpeechCapture.ts` (`expo-audio` AudioStream + on-device VAD); transcription by Gemini (§4) |
 | 3 | A Gemini "context window" seeded with the Gem prompt | `backend/app/assistant/sessions.py` (context), `brain.py` (`SYSTEM_PROMPT`) — see §2 for why the context is held server-side |
-| 4 | Send a picture every second | `hooks/useFrameStreamer.ts` → `POST /sessions/{id}/frames` |
+| 4 | Send a picture every second; Gem can go back to earlier frames (e.g. the backpack shown a minute ago) | `hooks/useFrameStreamer.ts` → `POST /sessions/{id}/frames`; visual memory in `SessionStore` (§2a) |
 | 5 | When the user stops speaking, send what they said as the prompt | VAD `utterance` event → `POST /sessions/{id}/turns` (WAV) |
 | 6 | Response = image + text; show the image, read the text with ElevenLabs | `brain.py` (boxes) + `render.py` (drawn photo) → `GET …/image`; `GET …/speech` |
 | 7 | Dismiss; text box with the response; read it again; keep ElevenLabs audio in RAM | Answer overlay; `services/answerAudio.ts` (player cache) + backend per-turn audio cache |
@@ -34,15 +34,37 @@ Researched October 2026 against Google's docs.
 | **generateContent + our own session** | Stateless calls; we keep the context. | Full control: buffer frames, send the most recent ones + history only when the user asks. Supports structured JSON output and (later) explicit context caching for researcher documents. |
 | **Image models** (`gemini-3.1-flash-image` "Nano Banana 2", `gemini-nano-banana-2.1`) | Edit a photo from a prompt. | Could literally return "the photo with a drawing", but adds seconds and cost per answer and may **alter the scene** (unacceptable when the photo shows a medical device or a reading). |
 
-**Choice:** Gem keeps the context window **in the backend** (rolling frame buffer + text
-history, purged after 10 idle minutes) and calls **`gemini-3.8-flash` via
-generateContent** when the user finishes speaking, with the last 3 frames, the audio, and
-the history. Gemini returns structured JSON with the transcript, the answer and **boxes on
-the current frame**; the backend **draws** them (Pillow). Result: same user experience,
-answer in one model call, deterministic drawing, ElevenLabs voice kept.
+**Choice:** Gem keeps the context window **in the backend** — a *visual memory* of the
+last 5 minutes of camera frames plus the text history, purged after 10 idle minutes — and
+calls **`gemini-3.8-flash` via generateContent** when the user finishes speaking, with
+**the whole visual memory**, the audio and the history. Gemini returns structured JSON with
+the transcript, the answer, **which frame** to show, and **boxes on that frame**; the backend
+**draws** them (Pillow). Result: Gem can answer "where did I leave my backpack?" by showing
+the frame from a minute ago with the backpack boxed; one model call per question;
+deterministic drawing; ElevenLabs voice kept.
 
-Cost/latency consequence: frames are uploaded every second but only **3 per question**
-reach Gemini, instead of a continuous ~1 frame/s token stream for the whole session.
+### 2a. Visual memory
+
+- The phone uploads 1 frame/s. The server **keeps** a frame only if it differs from the last
+  kept one (`change_score ≥ 0.02` on 32×32 grayscale) or 30 s have passed (keepalive), for
+  `GEM_MEMORY_S` (300 s), max 300 frames. A still scene costs ~10 frames per 5 minutes; a
+  moving one up to 300.
+- Every question sends **all** remembered frames, oldest first, each labelled
+  `Frame <id>, <n> seconds ago`. Older frames use per-image `MEDIA_RESOLUTION_LOW`
+  (**280 tokens**), the 2 newest `HIGH` (**1120 tokens**) so small text in the current view
+  stays readable.
+- The frames are the **first** message of the request and only ever grow at the end (old ones
+  drop off the front), so consecutive questions share a long identical prefix and Gemini's
+  **implicit caching** (Flash minimum 4,096 tokens) can bill the repeated part at the cached
+  rate.
+- Gemini answers with `frame_id`; boxes are drawn on that frame and the app shows
+  "Seen 58 seconds ago". A `frame_id` that wasn't sent → its boxes are dropped.
+
+Rough size per question: 1 minute of a changing scene ≈ 60 × 280 ≈ 17k tokens; the 5-minute
+worst case ≈ 85k tokens (well inside Flash's context window). Expect latency to grow with
+memory size; tune with `GEM_MEMORY_S`, `GEM_FRAME_DEDUPE_THRESHOLD` and
+`GEM_HIGH_RES_RECENT_FRAMES`. Check current Flash pricing before setting a long memory.
+Memory use: ~40–80 KB per frame → up to ~25 MB per session in RAM at the 300-frame cap.
 
 Revisit the Live API if we want Gemini to *interrupt* or speak proactively, or to drop
 ElevenLabs; revisit image models if we want stylized drawings (arrows, outlines) instead of
@@ -58,13 +80,13 @@ Phone (Expo Go)                                   Backend (FastAPI)             
 ---------------                                   -----------------                       -------------------
 permissions OK → POST /sessions ───────────────▶ new context window (frames=[], history=[])
 every 1 s: takePicture → 768 px JPEG
-  POST /sessions/{id}/frames ───────────────────▶ decode, keep last 10, change score
+  POST /sessions/{id}/frames ───────────────────▶ decode, change score; keep if scene changed (5-min memory)
 mic: AudioStream 16 kHz PCM → VAD
   speech_start  → UI "Hearing you…"
   ~1 s silence  → utterance (WAV)
-  POST /sessions/{id}/turns {audio} ────────────▶ last 3 frames + history + audio ─────▶ gemini-3.8-flash (JSON)
-                                                  ◀──── {transcript, is_request, answer, annotations[]}
-                                                  draw boxes on newest frame (RAM)
+  POST /sessions/{id}/turns {audio} ────────────▶ all remembered frames + history + audio ─▶ gemini-3.8-flash (JSON)
+                                                  ◀──── {transcript, is_request, answer, frame_id, annotations[]}
+                                                  draw boxes on frame_id (may be from minutes ago)
   ◀──────────────────────────────────────────── {answer, image_url, audio_url, transcript}
 show image + text box
   GET …/turns/{t}/speech ───────────────────────▶ first time: stream ElevenLabs ───────▶ eleven_flash_v2_5
@@ -107,8 +129,12 @@ from the portal is appended inside `<study_context>` tags.
 | Setting | Default | Env |
 |---------|---------|-----|
 | Session idle purge (no frame, no prompt) | 600 s | `GEM_SESSION_IDLE_TIMEOUT_S` |
-| Frames kept per session | 10 | `GEM_SESSION_MAX_FRAMES` |
-| Frames sent per question | 3 | `GEM_FRAMES_PER_TURN` |
+| Visual memory window | 300 s | `GEM_MEMORY_S` |
+| Max frames remembered | 300 | `GEM_SESSION_MAX_FRAMES` |
+| "Scene changed" threshold | 0.02 | `GEM_FRAME_DEDUPE_THRESHOLD` |
+| Keep a frame at least every | 30 s | `GEM_FRAME_KEEPALIVE_S` |
+| Newest frames at high resolution | 2 | `GEM_HIGH_RES_RECENT_FRAMES` |
+| Frames sent per question | all remembered | — |
 | Gemini budget | 20 s | `GEM_ASSISTANT_TIMEOUT_S` |
 | Model | `gemini-3.8-flash` | `GEMINI_ASSISTANT_MODEL` |
 | History kept | 20 exchanges (text only) | — |
