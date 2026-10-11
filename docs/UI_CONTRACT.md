@@ -13,21 +13,18 @@ screenshots: [`screenshots/`](screenshots/).
   the Expo SDK (install with `npx expo install <pkg>`). Safe choices: `expo-linear-gradient`,
   `expo-blur`, `expo-image`, `@expo/vector-icons`, `expo-font`, `react-native-svg`,
   `react-native-reanimated` (bundled in Expo Go). No `expo-av` (removed; audio is `expo-audio`).
-- One codebase: the portal is the **web** build, the patient app is the **native** build.
+- One codebase: the portal is the **web** build, the Gem assistant is the **native** build.
   Both must keep working (`npx expo start`, then `w` for web; Expo Go for native).
-  On web you can preview the patient app at `http://localhost:8081/?patient`.
-- The bounding box is drawn over the photo using Gemini's 0–1000 coordinates mapped by
-  `src/logic/boxMapping.ts`, which assumes the photo is shown with
-  `resizeMode="cover"` and fills `patient-viewport`. If you change how the photo is
-  displayed (contain, padding, aspect ratio), update the mapping call accordingly; keep
-  `BoundingBoxOverlay` positioned absolutely inside `patient-viewport`.
+  On web you can preview the Gem assistant at `http://localhost:8081/?patient`.
+- Live microphone streaming (`expo-audio` AudioStream) is **native only**; the web preview
+  (`?patient`) shows the mic error and works with typed questions.
 
 ## Where to restyle
 
 1. `mobile/src/ui/theme.ts` — colors, spacing, radii, font sizes, touch target size.
 2. `mobile/src/ui/primitives.tsx` — `Screen`, `AppText`, `Button`, `Card`, `TextField`, `Toggle`, `Row`, `Spinner`.
-3. Screen layout: `src/screens/patient/PatientScreen.tsx`, `src/screens/portal/PortalScreen.tsx`,
-   `src/screens/patient/BoundingBoxOverlay.tsx`.
+3. Screen layout: `src/screens/assistant/AssistantScreen.tsx`, `src/screens/assistant/PermissionScreen.tsx`,
+   `src/screens/portal/PortalScreen.tsx`.
 
 Primitives must keep forwarding `testID`, `onPress`/`onChangeText`/`onChange`, `disabled`,
 `loading` and the accessibility props.
@@ -39,9 +36,8 @@ Primitives must keep forwarding `testID`, `onPress`/`onChangeText`/`onChange`, `
 - Which hook each screen calls, and which hook value/handler each element uses.
 - Every `testID` listed below, on an element that renders in the listed state.
 - The set of states each screen renders (you may change how each looks).
-- `CameraPreview` must keep `ref={attachCamera}` and `onCameraReady={onReady}`; the
-  analyze button must stay disabled while `!cameraReady || busy`.
-- Busy overlay must block touches over the viewport while `analyzing`/`saving`.
+- `AssistantScreen`'s `CameraView` must keep `ref={attachCamera}` and `onCameraReady={onCameraReady}`.
+- `GemRoot` must keep gating `AssistantScreen` behind `permissions.status === 'granted'`.
 
 ## Accessibility (older, non-technical patients)
 
@@ -52,42 +48,49 @@ Primitives must keep forwarding `testID`, `onPress`/`onChangeText`/`onChange`, `
   on the status area. The box overlay stays hidden from screen readers.
 - One primary action per state. No gestures that require precision (no swipes, long-press).
 - Audio is the main channel; on-screen text must match what is spoken
-  (`patient-voice-text` shows `voice_script`/`message` verbatim).
+  (`assistant-answer-text` shows `answer.answer` verbatim).
 
 ---
 
-## Patient app — `PatientScreen`
+## Permissions — `PermissionScreen` (native)
 
-Hooks: `useActiveProtocol()` → `{status, protocol, refresh}`; `useCameraAccess()` →
-`{granted, canAskAgain, request}`; `useCapture(protocol, refresh)` →
-`{state, busy, attachCamera, cameraReady, onCameraReady, analyze, confirm, retake, repeatVoice}`.
+Rendered by `GemRoot` until `usePermissions().status === 'granted'`. Receives the
+`PermissionsController` as the `permissions` prop.
 
-### Pre-capture screens (from `useActiveProtocol` / `useCameraAccess`)
+| `status` | Required testIDs | Actions |
+|----------|------------------|---------|
+| `checking` | `permission-checking` | — |
+| `needed` | `permission-screen`, `permission-camera-status`, `permission-mic-status`, `permission-grant` | `request` |
+| `blocked` | `permission-screen`, `permission-camera-status`, `permission-mic-status`, `permission-blocked`, `permission-open-settings` | `openSettings` |
 
-| State | Root testID | Required elements | Actions |
-|-------|-------------|-------------------|---------|
-| loading protocol | `patient-loading` | text | — |
-| no protocol deployed | `patient-no-protocol` | title + explanation | `patient-retry-protocol` → `refresh` |
-| backend unreachable | `patient-offline` | title + "check Wi-Fi" | `patient-retry-protocol` → `refresh` |
-| camera permission | `patient-permission` | explanation; settings hint if `!canAskAgain` | `patient-grant-camera` → `request` |
+Copy must say that **both** camera and microphone are required, and show each one's status.
 
-### Capture screen (root `patient-screen`)
+## Assistant — `AssistantScreen` (native; web preview at `?patient`)
 
-Always present: `patient-protocol-title` (protocol.title), `patient-instructions`
-(protocol.prompt_text), `patient-viewport` (contains `patient-camera`; when a photo exists
-and state ≠ idle also `patient-photo`; when the result has a box, `patient-bounding-box`).
+Hook: `useAssistant()` →
+`{state, attachCamera, onCameraReady, micActive, micError, frames, dismiss, replay, retry, sendText}`.
+Destructure it (the React Compiler lint flags member access on an object that carries a ref).
 
-| `state.kind` | Required testIDs | Data shown | Actions |
-|--------------|------------------|------------|---------|
-| `idle` | `patient-analyze` | — | `analyze`; disabled while `!cameraReady \|\| busy` |
-| `analyzing` | `patient-busy-overlay`, `patient-analyze` (disabled); `patient-slow-notice` when `state.slow` | photo | none (blocked) |
-| `confirm` | `patient-confirm`, `patient-readings`, `patient-voice-text`, `patient-confirm-yes`, `patient-confirm-no`, `patient-repeat-voice`; `patient-flag-notice` if `capture.flags.length`; `patient-confirm-error` if `state.error` | `summarizeReadings(capture.readings)`, `capture.voice_script`, box | yes → `confirm`; no → `retake`; repeat → `repeatVoice` |
-| `saving` | same as confirm + `patient-busy-overlay`; yes shows loading | | none (blocked) |
-| `saved` | `patient-saved`, `patient-saved-readings`, `patient-voice-text`, `patient-done`, `patient-repeat-voice`; `patient-flag-notice` if `state.flagged` | `event.extracted_data`, `message`, "Already saved" if `duplicate` | done → `retake` |
-| `unclear` | `patient-unclear`, `patient-voice-text`, `patient-try-again`, `patient-repeat-voice` | `message`, photo (+box if any) | `retake` |
-| `rejected` | `patient-rejected`, `patient-voice-text`, `patient-try-again`, `patient-repeat-voice` | `message` (warning tone), photo + box | `retake` |
-| `offline` | `patient-offline`, `patient-voice-text`, `patient-try-again`, `patient-repeat-voice` | `message` | `retake` |
-| `error` | `patient-error`, `patient-voice-text`, `patient-try-again`, `patient-repeat-voice` | `message` | `retake` |
+Always present: `assistant-screen` (root), `assistant-camera` (full-screen `CameraView` with
+`ref={attachCamera}`, `onCameraReady={onCameraReady}`, `facing="back"`), `assistant-status`,
+`assistant-mic`, `assistant-frames`, `assistant-text-input`, `assistant-send`.
+
+| Condition | Required testIDs | Data | Actions |
+|-----------|------------------|------|---------|
+| `state.phase` | `assistant-status` text: starting → "Starting…", listening → "Listening…", hearing → "Hearing you…", thinking → "Thinking…", error → "Connection problem"; "Speaking…" whenever `state.speaking` | | |
+| mic | `assistant-mic` | `micActive`, `micError` (shown verbatim; on web it explains to type instead) | |
+| frames | `assistant-frames` | `frames.sent`, `frames.lastChangeScore` (diagnostic; may be visually de-emphasized) | |
+| `state.lastTranscript` | `assistant-heard` | "You said: …" | |
+| `state.notice` | `assistant-notice` | e.g. "I didn't catch that." | |
+| `phase === 'thinking'` | `assistant-thinking` | progress indicator | |
+| `phase === 'error'` | `assistant-error`, `assistant-retry` | `state.error` | `retry` |
+| typed question | `assistant-text-input`, `assistant-send` | | `sendText(text)` then clear; send disabled while empty/thinking/starting |
+| `state.answer` | `assistant-answer` (full-screen overlay), `assistant-answer-image` (only if `imageUri`), `assistant-answer-box` (scrollable text box), `assistant-answer-text`, `assistant-replay`, `assistant-dismiss` | `answer.imageUri` (show with `resizeMode="contain"` — the drawing is baked into the image), `answer.answer` | `replay`, `dismiss` |
+
+Constraints specific to this screen:
+- The camera must stay mounted under the answer overlay (frames keep flowing).
+- Don't play other sounds: the mic is open; Gem's own voice is handled by the hook.
+- The answer image already contains the markings; don't draw boxes in the UI.
 
 ## Researcher portal — `PortalScreen` (web, desktop width)
 
@@ -113,6 +116,9 @@ Label the limit fields in plain language: "Reject below/above" = `hard_min`/`har
 cd mobile
 npm run typecheck && npm run lint && npm test
 ```
-`src/__tests__/PatientScreen.contract.test.tsx` and `PortalScreen.contract.test.tsx` render
+`src/__tests__/AssistantScreen.contract.test.tsx` and `PortalScreen.contract.test.tsx` render
 every state above with mocked hooks and check the testIDs and handlers. A failure names
 exactly what to reconnect. Then run the HUMAN_TESTS "UI smoke" section on a phone.
+
+Screenshots of the current barebones UI: `screenshots/gem-listening.png`,
+`screenshots/gem-answer.png` (web preview with a fake camera), `screenshots/portal-*.png`.

@@ -1,23 +1,23 @@
 # Gem
 
-**Voice-guided camera workflows for decentralized clinical trials.** A researcher deploys a
-protocol step from a web portal; the patient points their phone at a device, Gemini reads
-it, an ElevenLabs voice reads it back, and a deterministic gateway validates the numbers
-before anything is stored.
+**A camera + voice assistant for decentralized clinical trials.** Open the app, point the
+camera, and ask. Gem watches through the camera (one frame per second), listens, and when
+you stop talking it answers with **a photo of what you're looking at with the relevant
+things marked**, plus a short answer read aloud.
 
 <p>
-<img src="docs/screenshots/patient-confirm.png" width="220" alt="Patient app read-back with bounding box">
-<img src="docs/screenshots/portal-results.png" width="520" alt="Researcher portal with gateway metrics">
+<img src="docs/screenshots/gem-answer.png" width="220" alt="Gem answer with a marked photo">
+<img src="docs/screenshots/portal-results.png" width="520" alt="Researcher portal">
 </p>
 
 | Component | Where |
 |-----------|-------|
-| Researcher portal (web) + patient app (Expo Go) | `mobile/` — Expo SDK 57, one codebase, `Platform.OS` switch |
-| AI pipeline (Gemini vision → ElevenLabs voice) | `backend/app/vision.py`, `backend/app/voice.py` |
-| Deterministic gateway (`POST /ingest_vitals`) | `backend/app/gateway.py`, `backend/app/ingest.py` |
+| Gem app (Expo Go) + researcher portal (web) | `mobile/` — Expo SDK 57, one codebase, `Platform.OS` switch |
+| Gem's context window, Gemini call, drawing, voice cache | `backend/app/assistant/` |
+| Protocols, deterministic gateway (`POST /ingest_vitals`) | `backend/app/` |
 
-Full behavior: [docs/SPEC.md](docs/SPEC.md) · HTTP: [docs/API_CONTRACT.md](docs/API_CONTRACT.md) ·
-Performance: [docs/PERFORMANCE.md](docs/PERFORMANCE.md) · UI handoff: [docs/UI_CONTRACT.md](docs/UI_CONTRACT.md)
+App behavior: [docs/ASSISTANT_SPEC.md](docs/ASSISTANT_SPEC.md) · HTTP: [docs/API_CONTRACT.md](docs/API_CONTRACT.md) ·
+UI handoff: [docs/UI_CONTRACT.md](docs/UI_CONTRACT.md) · Gateway: [docs/SPEC.md](docs/SPEC.md), [docs/PERFORMANCE.md](docs/PERFORMANCE.md)
 
 ## Quick start
 
@@ -34,17 +34,22 @@ cp .env.example .env            # add GEMINI_API_KEY / ELEVENLABS_API_KEY (or se
 cd mobile
 npm install
 echo "EXPO_PUBLIC_API_URL=http://<your-laptop-LAN-IP>:8000" > .env
-npx expo start                  # press w → researcher portal; scan QR in Expo Go → patient app
+npx expo start                  # press w → researcher portal; scan QR in Expo Go → Gem app
 ```
 
-In the portal: **Use blood pressure template → Deploy to patients**. On the phone: point at
-the monitor → **Read my device** → listen → **Yes, that's right**. The reading appears in the
-portal.
+On the phone: allow camera + microphone, point at something, ask a question out loud
+("What does this screen say?"), and stop talking. Gem shows the marked photo, the answer in
+a text box, and reads it out; **Read it again** replays without another ElevenLabs charge;
+**Dismiss** returns to the camera. You can also type a question.
 
-No keys? Leave them empty (or `GEM_MOCK_AI=1`): the backend uses a deterministic mock
-reader and the phone speaks with on-device TTS. Cover the lens to see the retake path;
-set `GEM_MOCK_READINGS='{"systolic": 900, "diastolic": 82}'` to watch the gateway block a
-hallucination.
+Optional: in the portal, deploy a protocol ("Use blood pressure template → Deploy") — its
+text is given to Gem as study context for new sessions.
+
+No keys? Leave them empty (or `GEM_MOCK_AI=1`): Gem gives a fixed test answer with a box in
+the middle and the phone uses its built-in voice. The live microphone works in Expo Go on
+a phone, not in the web preview (`http://localhost:8081/?patient`), which offers typing.
+
+No shared LAN? See HUMAN_TESTS §0 (VPN or tunnels).
 
 ## Reproducing the measurements (judges)
 
@@ -68,7 +73,10 @@ stored exactly once, 118/118 hallucinated values rejected. Details and caveats i
 
 ## How it stays trustworthy
 
-- **Zero-trust frontend:** the app holds no keys and never submits vitals; it uploads a
+- **No keys on the phone:** Gemini and ElevenLabs are called only by the backend.
+- **Gem's context is in RAM only** and is purged after 10 minutes without frames or questions.
+- **Gemini never edits the photo:** it returns boxes, the server draws them.
+- **Gateway (legacy capture flow):** the app holds no keys and never submits vitals; it uploads a
   photo and confirms a server-held capture.
 - **Gemini is untrusted:** structured JSON output is parsed strictly (box must be on the
   0–1000 grid, only the protocol's metrics, numbers only) or the frame is dropped.

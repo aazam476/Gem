@@ -128,3 +128,66 @@ so hallucinated strings/booleans are rejected *and audited*.
 | `GET /rejections?protocol_id=&limit=50` | 200 `Rejection[]` `{rejection_id, protocol_id, patient_id, session_id, capture_id, idempotency_key, readings, errors, validation_ns, timestamp}` |
 | `GET /metrics/gateway` | 200 `{"validation": {count, p50_us, p95_us, p99_us, max_us, mean_us}, "events_stored": int}` |
 | `POST /metrics/gateway/reset` | 200 (load test only) |
+
+## Gem assistant
+
+The phone app's API. A **session** is Gem's context window: recent frames + conversation
+history + recent answers, in RAM, purged after `idle_timeout_s` (600) without a frame or
+a prompt. Spec: [ASSISTANT_SPEC.md](ASSISTANT_SPEC.md).
+
+| `error` | HTTP | Meaning |
+|---------|------|---------|
+| `session_expired` | 410 | Purged after 10 idle minutes (or ended). Open a new session. |
+| `session_not_found` | 404 | Unknown id (e.g. server restarted). Open a new session. |
+| `turn_in_progress` | 409 | A question is already being answered in this session |
+| `bad_audio` | 422 | `audio_base64` not base64, empty, or > 4 MB |
+| `ai_timeout` | 504 | Gemini didn't answer within `GEM_ASSISTANT_TIMEOUT_S` (`voice_line_id=network_error`) |
+| `ai_error`, `invalid_output` | 502 | Gemini failed or returned unusable JSON (`voice_line_id=network_error`) |
+| `turn_not_found`, `no_image`, `voice_disabled` | 404 | |
+| `voice_unavailable` | 502 | ElevenLabs failed; speak the answer on-device |
+
+### `POST /sessions` → 201 `Session`
+Body optional: `{"patient_id": "patient-demo-001"}`.
+```json
+{"session_id": "uuid", "idle_timeout_s": 600, "expires_in_s": 600, "frame_interval_ms": 1000,
+ "frames_buffered": 0, "frames_received": 0, "turns": 0, "study_context": true}
+```
+`study_context` is true when a protocol was active at creation (its text is given to Gemini).
+
+### `GET /sessions/{id}` → 200 `Session` · `DELETE /sessions/{id}` → 204
+Reading does not extend the idle timeout.
+
+### `POST /sessions/{id}/frames` → 200
+Request `{"image_base64": "<jpeg>"}` (≤ 3 MB decoded; downscaled to 768 px long edge). Counts as activity.
+```json
+{"frames_buffered": 10, "frames_received": 57, "change_score": 0.08, "expires_in_s": 600}
+```
+`change_score`: mean absolute difference vs. the previous frame on 32×32 grayscale, 0–1;
+`null` for the first frame. (Input for the planned inactivity detector.)
+
+### `POST /sessions/{id}/turns` → 200 `Turn`
+Exactly one of:
+- `{"audio_base64": "<wav>", "audio_mime": "audio/wav"}` — the user's utterance (16 kHz mono PCM WAV from the app; `audio/mp3|mpeg|aac|ogg|flac|mp4` also accepted)
+- `{"text": "Where is the start button?"}` — typed question
+
+Counts as activity. The newest `GEM_FRAMES_PER_TURN` (3) frames, the history and the input go to Gemini.
+```json
+{"turn_id": "uuid",
+ "status": "answered" | "ignored",          // ignored = no speech / not addressed to Gem
+ "transcript": "where is the start button",
+ "answer": "It's the round blue button below the screen. I've marked it.",
+ "annotations": [{"label": "start button", "box_2d": [785, 470, 865, 530]}],  // [ymin,xmin,ymax,xmax] 0-1000 on the newest frame
+ "image_url": "/sessions/{id}/turns/{turn_id}/image" | null,                     // null when no frames / ignored
+ "image_width": 768, "image_height": 576,
+ "audio_url": "/sessions/{id}/turns/{turn_id}/speech" | null,                    // null without ElevenLabs
+ "frames_used": 3, "latency_ms": 1840.2}
+```
+
+### `GET /sessions/{id}/turns/{turn_id}/image` → 200 `image/jpeg`
+The newest frame at question time with the annotations drawn (yellow boxes, black labels;
+tiny boxes drawn as rings). Kept in RAM for the last 10 answers.
+
+### `GET /sessions/{id}/turns/{turn_id}/speech` → 200 `audio/mpeg`
+ElevenLabs `eleven_flash_v2_5` of `answer`. First request streams it while caching it
+(`X-Gem-Audio-Cache: miss`); later requests return the cached bytes (`hit`) — ElevenLabs is
+billed once per answer. Concurrent first requests wait for the same synthesis.

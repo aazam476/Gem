@@ -52,8 +52,33 @@ needs a human (see HUMAN_TESTS.md).
 - [ ] After restyle: run `cd mobile && npm run typecheck && npm run lint && npm test`; reconnect anything the contract tests name
 - [ ] 👤 HUMAN_TESTS §5
 
+## Phase 8 — Gem assistant (camera + voice) ✅ built
+- [x] Research Gemini context options (Live, Interactions, generateContent, image models) → ASSISTANT_SPEC §2
+- [x] Backend session = context window (frames buffer, history, RAM answers), 10-min idle purge + sweeper, 410 tombstones
+- [x] `POST /sessions/{id}/frames` (1 fps, change score), `POST …/turns` (WAV or text), `GET …/image`, `GET …/speech` (RAM cache)
+- [x] Gem system prompt + JSON schema + strict parsing; boxes drawn server-side; mock brain
+- [x] App: permission gate, full-screen camera, 1 fps frames, AudioStream + VAD, answer overlay, replay/dismiss, typed fallback, session recovery
+- [x] Tests: backend 38 new; mobile VAD/WAV/state/audio-cache/hook/contract tests; web run with fake camera
+- [ ] 👤 Phone run: HUMAN_TESTS §2–§4 (mic + VAD + ElevenLabs + real Gemini are untested by the agent)
+- **Check:** `./scripts/check.sh`
+
+## Phase 9 — Inactivity detection (next)
+- [ ] `npx expo install expo-sensors`; `hooks/useMotion.ts` (DeviceMotion magnitude, 5 Hz)
+- [ ] Pure `logic/activity.ts`: inactive when no speech, motion below threshold, and frame `change_score` below threshold for 60 s; unit tests with synthetic timelines
+- [ ] Pause frames (`useFrameStreamer(enabled=false)`) after 1 min inactive; resume on motion/speech/scene change; UI "Paused — move or speak to wake Gem"
+- [ ] Server purge already handles the 10-min context drop; add a client-side purge (DELETE) at 10 min for privacy
+- [ ] HUMAN_TESTS for phone-on-table / phone-in-pocket / talking-while-still
+
+## Phase 10 — Researcher context uploads (next)
+- [ ] Data model: studies, documents (text, image, PDF), patient → study assignment
+- [ ] Portal: upload/list/delete documents, write study notes
+- [ ] Backend: Gemini Files API upload; explicit context cache per study (TTL refreshed while sessions are active); attach to turns; replace `study_context()` placeholder
+- [ ] Prompt: cite which document an answer came from when relevant
+- [ ] Tests with mocked Files/caches APIs; live test behind `GEM_LIVE_TESTS`
+
 ## Backlog (not started)
-- Two-frame agreement before read-back (capture twice, require equal readings)
+- Decide whether to delete the legacy capture/gateway endpoints or expose the gateway as a Gem tool
+- Two-frame agreement before read-back (legacy flow)
 - Multi-step protocols; per-patient enrollment and auth
 - On-device detection for the AR box (MediaPipe) — see SPEC §9
 - Offline capture queue on the phone

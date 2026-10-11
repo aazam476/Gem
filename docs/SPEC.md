@@ -1,4 +1,9 @@
-# Gem — System Specification
+# Gem — System Specification (protocols, gateway, legacy capture flow)
+
+> **Status (Phase 8):** the phone app is now the **Gem camera assistant** — see
+> [ASSISTANT_SPEC.md](ASSISTANT_SPEC.md). This document still describes the researcher
+> portal, protocols, and the deterministic gateway. The patient capture/confirm flow below
+> (§3, `/captures`) remains in the backend and its tests but is **no longer used by the app**.
 
 Build spec for the TrialGuide Gateway concept ("FaceTiming Gemini"): a voice-guided
 camera workflow for decentralized clinical trials. Pitch material lives in

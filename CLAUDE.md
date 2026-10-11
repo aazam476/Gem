@@ -1,17 +1,22 @@
 # Gem — agent instructions
 
-Voice-guided camera app for decentralized clinical trials. A researcher deploys a
-protocol step on the web portal; a patient points their phone at a device (e.g. a BP
-monitor); Gemini reads it; the patient hears an ElevenLabs read-back and confirms; a
-deterministic gateway validates the numbers before anything is stored.
+**Gem** is a camera + voice assistant for decentralized clinical trials. The phone app is a
+full-screen camera that sends one frame per second to a backend session (Gem's context
+window), listens continuously, and when the user stops talking sends the utterance to
+Gemini with the latest frames; Gem answers with a photo of the scene with markings and a
+short answer read aloud by ElevenLabs. Researchers use the web portal (protocols today,
+study documents next). A deterministic validation gateway (legacy capture flow) also lives
+in the backend.
 
-Read `docs/SPEC.md` (behavior) and `docs/API_CONTRACT.md` (HTTP) before changing either side.
+Read `docs/ASSISTANT_SPEC.md` (the app), `docs/SPEC.md` (portal/gateway) and
+`docs/API_CONTRACT.md` (HTTP) before changing either side.
 
 ## Stack (pinned)
 - Backend: Python 3.12+ (tested on 3.13), FastAPI 0.143, Pydantic 2, SQLite (WAL), `google-genai` 2.29, httpx. `backend/requirements.txt`.
-- Mobile + portal: one Expo **SDK 57** app (React Native 0.86, React 19.2, TypeScript 6). Web build = researcher portal, native = patient app.
+- Mobile + portal: one Expo **SDK 57** app (React Native 0.86, React 19.2, TypeScript 6). Web build = researcher portal, native = Gem assistant app.
   Audio is `expo-audio` (expo-av no longer exists). Add native deps only with `npx expo install` and only Expo Go-compatible modules.
-- Models: Gemini `GEMINI_MODEL` (default `gemini-3.6-flash`), ElevenLabs `eleven_flash_v2_5`. Both configurable in `backend/.env`.
+- Models: assistant `GEMINI_ASSISTANT_MODEL` (default `gemini-3.8-flash`), legacy reader `GEMINI_MODEL` (`gemini-3.6-flash`), ElevenLabs `eleven_flash_v2_5`. All configurable in `backend/.env`.
+- Mic: `expo-audio` `useAudioStream` (PCM, native only — null on web) + `src/logic/vad.ts`. Camera frames: `expo-camera` `takePictureAsync` every second.
 
 ## Commands
 ```bash
@@ -25,7 +30,7 @@ python -m venv .venv && .venv/bin/pip install -r requirements.txt
 # mobile (from mobile/)
 npm install
 npm run typecheck && npm run lint && npm test
-npx expo start            # press w for portal, scan QR in Expo Go for patient app
+npx expo start            # press w for portal, scan QR in Expo Go for the Gem app
 
 # everything
 ./scripts/check.sh
@@ -34,7 +39,10 @@ npx expo start            # press w for portal, scan QR in Expo Go for patient a
 ## Hard rules
 - **No secrets in `mobile/`.** Anything `EXPO_PUBLIC_*` ships to phones. Keys live only in `backend/.env` (gitignored).
 - **No live API calls in tests.** Backend tests block outbound sockets; use `ScriptedVision`/`httpx.MockTransport`. Live checks go in `tests/test_live.py` behind `GEM_LIVE_TESTS=1`.
-- **The phone never submits vitals values.** It uploads an image and confirms a server-held `capture_id`. Only `app/ingest.py::ingest` writes `clinical_events`.
+- **Gem's context is RAM-only.** Frames, transcripts, drawn images and audio live in `SessionStore` and are purged after 10 idle minutes. Don't persist them without an explicit decision.
+- **Mic is muted while Gem thinks or speaks** (`isMicMuted`). Keep it that way unless echo cancellation is added.
+- **Gemini never draws pixels.** It returns boxes; `app/assistant/render.py` draws them. Parse its JSON strictly (`brain.parse_reply`).
+- **Only `app/ingest.py::ingest` writes `clinical_events`** (legacy gateway path).
 - **`app/gateway.py` stays pure**: no I/O, no AI, no clock. Anything it decides must be unit-tested in `tests/test_gateway.py`.
 - **Screens contain no logic.** Behavior goes in `src/hooks`, `src/services`, `src/logic`. Every required element has the `testID` listed in `docs/UI_CONTRACT.md`; keep the contract tests passing.
 - Keep `backend/app/voice_lines.py` and `mobile/src/services/voiceLines.json` identical (a test enforces it).
@@ -50,6 +58,7 @@ npx expo start            # press w for portal, scan QR in Expo Go for patient a
 Run `cd mobile && npm run typecheck && npm run lint && npm test`. Failing contract tests name the testID/handler/state that was dropped; reconnect it to the hook without changing the hook's API. See `docs/UI_CONTRACT.md`.
 
 ## Map
-- `backend/app/` — `main.py` (routes), `gateway.py` (pure validation), `ingest.py` (idempotent write path), `store.py` (SQLite + rule cache), `vision.py` (Gemini + mock), `voice.py` (ElevenLabs), `imaging.py`, `rules.py`, `voice_lines.py`
-- `mobile/src/` — `api/`, `hooks/`, `logic/`, `services/`, `ui/` (theme + primitives), `screens/`, `__tests__/`
-- `docs/` — SPEC, API_CONTRACT, UI_CONTRACT, TASKS, DECISIONS, HUMAN_TESTS, PERFORMANCE, PITCH (pitch/demo material; not needed for coding)
+- `backend/app/assistant/` — `sessions.py` (context window + idle purge), `brain.py` (Gem prompt, schema, Gemini/mock), `render.py` (draw boxes), `routes.py` (`/sessions/...`)
+- `backend/app/` — `main.py` (app + portal/gateway routes), `gateway.py` (pure validation), `ingest.py`, `store.py` (SQLite + rule cache), `vision.py` (legacy reader), `voice.py` (ElevenLabs), `imaging.py`, `rules.py`, `voice_lines.py`
+- `mobile/src/` — `hooks/useAssistant.ts` (orchestration), `useSpeechCapture.ts`, `useFrameStreamer.ts`, `usePermissions.ts`, `usePortal.ts`; `logic/` (`vad`, `pcm`, `wav`, `assistantState`, `rulesForm`); `services/` (`answerAudio`, `image`, `lines`); `screens/assistant/`, `screens/portal/`; `ui/`; `__tests__/`
+- `docs/` — ASSISTANT_SPEC, SPEC, API_CONTRACT, UI_CONTRACT, TASKS (phases 9–10 planned), DECISIONS, HUMAN_TESTS, PERFORMANCE, PITCH (pitch only)

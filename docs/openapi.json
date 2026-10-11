@@ -622,10 +622,361 @@
           }
         }
       }
+    },
+    "/sessions": {
+      "post": {
+        "tags": [
+          "assistant"
+        ],
+        "summary": "Create Session",
+        "operationId": "create_session_sessions_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/SessionCreate"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sessions/{session_id}": {
+      "get": {
+        "tags": [
+          "assistant"
+        ],
+        "summary": "Get Session",
+        "operationId": "get_session_sessions__session_id__get",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "assistant"
+        ],
+        "summary": "End Session",
+        "operationId": "end_session_sessions__session_id__delete",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sessions/{session_id}/frames": {
+      "post": {
+        "tags": [
+          "assistant"
+        ],
+        "summary": "Add Frame",
+        "operationId": "add_frame_sessions__session_id__frames_post",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FrameIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FrameOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sessions/{session_id}/turns": {
+      "post": {
+        "tags": [
+          "assistant"
+        ],
+        "summary": "Add Turn",
+        "operationId": "add_turn_sessions__session_id__turns_post",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TurnIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TurnOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sessions/{session_id}/turns/{turn_id}/image": {
+      "get": {
+        "tags": [
+          "assistant"
+        ],
+        "summary": "Turn Image",
+        "operationId": "turn_image_sessions__session_id__turns__turn_id__image_get",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "turn_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Turn Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Turn Image Sessions  Session Id  Turns  Turn Id  Image Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sessions/{session_id}/turns/{turn_id}/speech": {
+      "get": {
+        "tags": [
+          "assistant"
+        ],
+        "summary": "Turn Speech",
+        "description": "ElevenLabs audio for an answer. Synthesized at most once per turn: the first\nrequest streams it through while caching it in RAM; later requests (replays)\nare served from the cache with no ElevenLabs call.",
+        "operationId": "turn_speech_sessions__session_id__turns__turn_id__speech_get",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "turn_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Turn Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Turn Speech Sessions  Session Id  Turns  Turn Id  Speech Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
     "schemas": {
+      "AnnotationOut": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "box_2d": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Box 2D"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label",
+          "box_2d"
+        ],
+        "title": "AnnotationOut"
+      },
       "CaptureCreate": {
         "properties": {
           "protocol_id": {
@@ -917,6 +1268,58 @@
         ],
         "title": "EventOut"
       },
+      "FrameIn": {
+        "properties": {
+          "image_base64": {
+            "type": "string",
+            "maxLength": 4000000,
+            "minLength": 1,
+            "title": "Image Base64"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "image_base64"
+        ],
+        "title": "FrameIn"
+      },
+      "FrameOut": {
+        "properties": {
+          "frames_buffered": {
+            "type": "integer",
+            "title": "Frames Buffered"
+          },
+          "frames_received": {
+            "type": "integer",
+            "title": "Frames Received"
+          },
+          "change_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change Score",
+            "description": "0 = identical to previous frame, 1 = completely different"
+          },
+          "expires_in_s": {
+            "type": "number",
+            "title": "Expires In S"
+          }
+        },
+        "type": "object",
+        "required": [
+          "frames_buffered",
+          "frames_received",
+          "change_score",
+          "expires_in_s"
+        ],
+        "title": "FrameOut"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -1207,6 +1610,193 @@
           "created_at"
         ],
         "title": "ProtocolOut"
+      },
+      "SessionCreate": {
+        "properties": {
+          "patient_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.:-]{1,128}$",
+            "title": "Patient Id",
+            "default": "patient-demo-001"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "SessionCreate"
+      },
+      "SessionOut": {
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "title": "Session Id"
+          },
+          "idle_timeout_s": {
+            "type": "number",
+            "title": "Idle Timeout S"
+          },
+          "expires_in_s": {
+            "type": "number",
+            "title": "Expires In S"
+          },
+          "frame_interval_ms": {
+            "type": "integer",
+            "title": "Frame Interval Ms"
+          },
+          "frames_buffered": {
+            "type": "integer",
+            "title": "Frames Buffered"
+          },
+          "frames_received": {
+            "type": "integer",
+            "title": "Frames Received"
+          },
+          "turns": {
+            "type": "integer",
+            "title": "Turns"
+          },
+          "study_context": {
+            "type": "boolean",
+            "title": "Study Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "session_id",
+          "idle_timeout_s",
+          "expires_in_s",
+          "frame_interval_ms",
+          "frames_buffered",
+          "frames_received",
+          "turns",
+          "study_context"
+        ],
+        "title": "SessionOut"
+      },
+      "TurnIn": {
+        "properties": {
+          "audio_base64": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 6000000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audio Base64"
+          },
+          "audio_mime": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audio Mime"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "TurnIn"
+      },
+      "TurnOut": {
+        "properties": {
+          "turn_id": {
+            "type": "string",
+            "title": "Turn Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "answered",
+              "ignored"
+            ],
+            "title": "Status"
+          },
+          "transcript": {
+            "type": "string",
+            "title": "Transcript"
+          },
+          "answer": {
+            "type": "string",
+            "title": "Answer"
+          },
+          "annotations": {
+            "items": {
+              "$ref": "#/components/schemas/AnnotationOut"
+            },
+            "type": "array",
+            "title": "Annotations"
+          },
+          "image_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Url"
+          },
+          "image_width": {
+            "type": "integer",
+            "title": "Image Width"
+          },
+          "image_height": {
+            "type": "integer",
+            "title": "Image Height"
+          },
+          "audio_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audio Url"
+          },
+          "frames_used": {
+            "type": "integer",
+            "title": "Frames Used"
+          },
+          "latency_ms": {
+            "type": "number",
+            "title": "Latency Ms"
+          }
+        },
+        "type": "object",
+        "required": [
+          "turn_id",
+          "status",
+          "transcript",
+          "answer",
+          "annotations",
+          "image_url",
+          "image_width",
+          "image_height",
+          "audio_url",
+          "frames_used",
+          "latency_ms"
+        ],
+        "title": "TurnOut"
       },
       "ValidationError": {
         "properties": {
