@@ -15,6 +15,14 @@ describe('ActivityTracker', () => {
     expect(t.state(600_000)).toBe('expired');
   });
 
+  it('uses timings changed later (from the portal)', () => {
+    const t = new ActivityTracker(0);
+    t.setTimings(120_000, 900_000);
+    expect(t.state(119_999)).toBe('active');
+    expect(t.state(120_000)).toBe('idle');
+    expect(t.state(900_000)).toBe('expired');
+  });
+
   it('phone lying still on a table is not activity; picking it up is', () => {
     const t = new ActivityTracker(0);
     const still = { x: 0.001, y: -0.002, z: -1.0 };
@@ -68,6 +76,18 @@ describe('useActivity', () => {
       (Accelerometer as unknown as Emitter).emit({ x: 0.3, y: 0.1, z: -0.8 });
     });
     expect(result.current.state).toBe('active');
+  });
+
+  it('applies timings passed in', async () => {
+    const { result } = await renderHook(() => useActivity({ idleAfterMs: 20_000, purgeAfterMs: 40_000 }));
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(21_000);
+    });
+    expect(result.current.state).toBe('idle');
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(20_000);
+    });
+    expect(result.current.state).toBe('expired');
   });
 
   it('speech or a scene change keeps it active', async () => {

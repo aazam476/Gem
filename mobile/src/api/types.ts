@@ -145,6 +145,16 @@ export interface AssistantSession {
   frames_received: number;
   turns: number;
   study_context: boolean;
+  study_documents: number;
+  /** Portal setting: pause frames after this much inactivity. */
+  idle_after_s: number;
+  /** Portal setting: end the session (purge Gem's context) after this much inactivity. */
+  purge_after_s: number;
+}
+
+export interface AssistantSettings {
+  idle_after_s: number;
+  purge_after_s: number;
 }
 
 export interface FrameAck {

@@ -23,8 +23,12 @@ jest.mock('../api/client', () => {
 let mockActivityState: 'active' | 'idle' | 'expired' = 'active';
 const mockActivityNote = jest.fn();
 const mockActivityFrame = jest.fn();
+const mockActivityTimings = jest.fn();
 jest.mock('../hooks/useActivity', () => ({
-  useActivity: () => ({ state: mockActivityState, note: mockActivityNote, noteFrameChange: mockActivityFrame }),
+  useActivity: (timings: unknown) => {
+    mockActivityTimings(timings);
+    return { state: mockActivityState, note: mockActivityNote, noteFrameChange: mockActivityFrame };
+  },
 }));
 
 let mic: SpeechCaptureOptions;
@@ -64,6 +68,14 @@ describe('useAssistant', () => {
     expect(mic.enabled).toBe(true);
     expect(mic.muted).toBe(false);
     expect(result.current.micActive).toBe(true);
+  });
+
+  it('uses the inactivity timings set in the portal (delivered with the session)', async () => {
+    createSession.mockImplementationOnce(async () => ({ session_id: 's-1', idle_after_s: 120, purge_after_s: 900 }));
+    await setup();
+    await waitFor(() =>
+      expect(mockActivityTimings).toHaveBeenLastCalledWith({ idleAfterMs: 120_000, purgeAfterMs: 900_000 }),
+    );
   });
 
   it('streams one frame per second once the camera is ready', async () => {

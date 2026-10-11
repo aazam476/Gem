@@ -15,6 +15,7 @@ import {
   canSendTurn,
   initialAssistantState,
   isMicMuted,
+  NOTICE_MS,
   shouldStreamFrames,
   type AssistantState,
 } from '../logic/assistantState';
@@ -72,6 +73,9 @@ export function useAssistant(): AssistantController {
     );
   }
 
+  /** Inactivity timings from the portal, delivered with each session. */
+  const [timings, setTimings] = useState<{ idleAfterMs: number; purgeAfterMs: number } | undefined>();
+
   const ensureSession = useCallback(async (): Promise<string> => {
     if (session.current) return session.current;
     if (!creating.current) {
@@ -79,6 +83,9 @@ export function useAssistant(): AssistantController {
         .createSession()
         .then((s) => {
           session.current = s.session_id;
+          if (s.idle_after_s && s.purge_after_s) {
+            setTimings({ idleAfterMs: s.idle_after_s * 1000, purgeAfterMs: s.purge_after_s * 1000 });
+          }
           return s.session_id;
         })
         .finally(() => {
@@ -103,7 +110,7 @@ export function useAssistant(): AssistantController {
     [ensureSession],
   );
 
-  const activity = useActivity();
+  const activity = useActivity(timings);
   const { note, noteFrameChange } = activity;
 
   const startSession = useCallback(() => {
@@ -139,6 +146,13 @@ export function useAssistant(): AssistantController {
   // Paused while an answer is on screen (the memory keeps what the user was asking about)
   // and after 1 minute of inactivity (no movement, speech or scene change).
   const streaming = cameraReady && appActive && shouldStreamFrames(state) && activity.state === 'active';
+
+  // Transient notices disappear on their own.
+  useEffect(() => {
+    if (!state.notice) return;
+    const t = setTimeout(() => dispatch({ type: 'CLEAR_NOTICE' }), NOTICE_MS);
+    return () => clearTimeout(t);
+  }, [state.notice]);
 
   // Gem thinking or talking counts as activity.
   useEffect(() => {

@@ -25,6 +25,16 @@ export interface PortalController {
   rejections: Rejection[];
   metrics: GatewayMetrics | null;
 
+  /** Gem inactivity timings, edited in minutes. */
+  idleMinutes: string;
+  purgeMinutes: string;
+  settingsSaving: boolean;
+  settingsMessage: string | null;
+  settingsError: string | null;
+  setIdleMinutes: (v: string) => void;
+  setPurgeMinutes: (v: string) => void;
+  saveSettings: () => void;
+
   /** Protocol whose study documents are shown (defaults to the active one). */
   documentsProtocol: Protocol | null;
   documents: StudyDocument[];
@@ -76,6 +86,22 @@ export function usePortal(): PortalController {
   const [deployMessage, setDeployMessage] = useState<string | null>(null);
   const mounted = useRef(true);
   const [selectedDocsProtocol, setSelectedDocsProtocol] = useState<string | null>(null);
+  const [idleMinutes, setIdleMinutes] = useState('');
+  const [purgeMinutes, setPurgeMinutes] = useState('');
+  const [settingsSaving, setSettingsSaving] = useState(false);
+  const [settingsMessage, setSettingsMessage] = useState<string | null>(null);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
+
+  useEffect(() => {
+    api
+      .getAssistantSettings()
+      .then((st) => {
+        if (!mounted.current) return;
+        setIdleMinutes(formatMinutes(st.idle_after_s));
+        setPurgeMinutes(formatMinutes(st.purge_after_s));
+      })
+      .catch(() => undefined);
+  }, []);
   const [documents, setDocuments] = useState<StudyDocument[]>([]);
   const [noteTitle, setNoteTitle] = useState('');
   const [noteText, setNoteText] = useState('');
@@ -200,7 +226,40 @@ export function usePortal(): PortalController {
     [refresh],
   );
 
+  const saveSettings = () => {
+    const idle = parseMinutes(idleMinutes);
+    const purge = parseMinutes(purgeMinutes);
+    setSettingsMessage(null);
+    if (idle === null || purge === null) {
+      setSettingsError('Enter both times in minutes, e.g. 1 or 0.5.');
+      return;
+    }
+    if (idle < 15 || idle > 3600) {
+      setSettingsError('Pause after must be between 0.25 and 60 minutes.');
+      return;
+    }
+    if (purge <= idle || purge > 86_400) {
+      setSettingsError('Forget after must be longer than pause after, and at most 24 hours.');
+      return;
+    }
+    setSettingsError(null);
+    setSettingsSaving(true);
+    api
+      .saveAssistantSettings({ idle_after_s: idle, purge_after_s: purge })
+      .then(() => mounted.current && setSettingsMessage('Saved. New Gem sessions use these times.'))
+      .catch((err: unknown) => mounted.current && setSettingsError(err instanceof Error ? err.message : 'Save failed.'))
+      .finally(() => mounted.current && setSettingsSaving(false));
+  };
+
   return {
+    idleMinutes,
+    purgeMinutes,
+    settingsSaving,
+    settingsMessage,
+    settingsError,
+    setIdleMinutes,
+    setPurgeMinutes,
+    saveSettings,
     documentsProtocol,
     documents,
     noteTitle,
@@ -260,4 +319,16 @@ export function usePortal(): PortalController {
     deactivate,
     refresh,
   };
+}
+
+/** 90 -> "1.5" */
+export function formatMinutes(seconds: number): string {
+  return String(Math.round((seconds / 60) * 100) / 100);
+}
+
+/** "1.5" -> 90 seconds; null if not a positive number. */
+export function parseMinutes(text: string): number | null {
+  const n = Number(text.trim().replace(',', '.'));
+  if (!text.trim() || !Number.isFinite(n) || n <= 0) return null;
+  return Math.round(n * 60);
 }

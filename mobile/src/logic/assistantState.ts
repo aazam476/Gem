@@ -50,6 +50,7 @@ export type AssistantEvent =
   | { type: 'TURN_FAILED'; message: string }
   | { type: 'SPEAKING'; speaking: boolean }
   | { type: 'DISMISS' }
+  | { type: 'CLEAR_NOTICE' }
   | { type: 'RETRY' };
 
 export const initialAssistantState: AssistantState = {
@@ -69,6 +70,9 @@ export const initialAssistantState: AssistantState = {
 export function isMicMuted(s: AssistantState): boolean {
   return s.phase === 'starting' || s.phase === 'thinking';
 }
+
+/** How long a transient notice ("I didn't catch that") stays on screen. */
+export const NOTICE_MS = 3_000;
 
 /** Camera frames go into Gem's memory only while the user is looking through the camera,
  * not while an answer (photo + text) is on screen. */
@@ -104,6 +108,8 @@ export function assistantReducer(s: AssistantState, e: AssistantEvent): Assistan
       return { ...s, speaking: e.speaking };
     case 'DISMISS':
       return { ...s, answer: null, speaking: false };
+    case 'CLEAR_NOTICE':
+      return s.notice ? { ...s, notice: null } : s;
     case 'RETRY':
       return s.phase === 'error' ? { ...s, phase: 'listening', error: null } : s;
   }

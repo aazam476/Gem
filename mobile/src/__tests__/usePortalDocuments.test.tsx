@@ -2,8 +2,7 @@ import { act, renderHook, waitFor } from '@testing-library/react-native';
 import * as DocumentPicker from 'expo-document-picker';
 
 import { api } from '../api/client';
-import { usePortal } from '../hooks/usePortal';
-import { protocol } from '../testing/fixtures';
+import { formatMinutes, parseMinutes, usePortal } from '../hooks/usePortal';
 
 jest.mock('../api/client', () => {
   const actual = jest.requireActual('../api/client');
@@ -19,6 +18,8 @@ jest.mock('../api/client', () => {
       addNote: jest.fn(async () => ({})),
       addFile: jest.fn(async () => ({})),
       deleteDocument: jest.fn(async () => null),
+      getAssistantSettings: jest.fn(async () => ({ idle_after_s: 60, purge_after_s: 600 })),
+      saveAssistantSettings: jest.fn(async (s: unknown) => s),
     },
   };
 });
@@ -99,5 +100,50 @@ describe('usePortal study documents', () => {
     const { result } = await setup();
     await act(async () => result.current.deleteDocument('d-9'));
     await waitFor(() => expect(api.deleteDocument).toHaveBeenCalledWith('p-1', 'd-9'));
+  });
+});
+
+describe('usePortal Gem inactivity settings', () => {
+  it('loads the saved timings in minutes', async () => {
+    const { result } = await setup();
+    await waitFor(() => expect(result.current.idleMinutes).toBe('1'));
+    expect(result.current.purgeMinutes).toBe('10');
+  });
+
+  it('saves valid timings as seconds', async () => {
+    const { result } = await setup();
+    await waitFor(() => expect(result.current.idleMinutes).toBe('1'));
+    await act(async () => {
+      result.current.setIdleMinutes('0.5');
+      result.current.setPurgeMinutes('15');
+    });
+    await act(async () => result.current.saveSettings());
+    expect(api.saveAssistantSettings).toHaveBeenCalledWith({ idle_after_s: 30, purge_after_s: 900 });
+    await waitFor(() => expect(result.current.settingsMessage).toMatch(/Saved/));
+    expect(result.current.settingsError).toBeNull();
+  });
+
+  it.each([
+    ['abc', '10', /in minutes/],
+    ['0.1', '10', /between 0.25 and 60/],
+    ['5', '5', /longer than/],
+    ['5', '2000', /at most 24 hours/],
+  ])('rejects idle=%s purge=%s', async (idle, purge, message) => {
+    const { result } = await setup();
+    await waitFor(() => expect(result.current.idleMinutes).toBe('1'));
+    await act(async () => {
+      result.current.setIdleMinutes(idle);
+      result.current.setPurgeMinutes(purge);
+    });
+    await act(async () => result.current.saveSettings());
+    expect(api.saveAssistantSettings).not.toHaveBeenCalled();
+    expect(result.current.settingsError).toMatch(message);
+  });
+
+  it('converts between minutes and seconds', () => {
+    expect(formatMinutes(90)).toBe('1.5');
+    expect(parseMinutes('1,5')).toBe(90);
+    expect(parseMinutes('')).toBeNull();
+    expect(parseMinutes('-1')).toBeNull();
   });
 });

@@ -8,6 +8,7 @@ import {
 } from '../config';
 import type {
   AssistantSession,
+  AssistantSettings,
   FrameAck,
   TurnInput,
   TurnOut,
@@ -63,7 +64,7 @@ export function absoluteUrl(path: string): string {
 }
 
 async function request<T>(
-  method: 'GET' | 'POST' | 'DELETE',
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE',
   path: string,
   body?: unknown,
   timeoutMs: number = DEFAULT_TIMEOUT_MS,
@@ -131,6 +132,10 @@ export const api = {
       'POST',
       `/captures/${encodeURIComponent(captureId)}/discard`,
     ),
+
+  // Gem behaviour settings (researcher portal)
+  getAssistantSettings: () => request<AssistantSettings>('GET', '/settings/assistant'),
+  saveAssistantSettings: (s: AssistantSettings) => request<AssistantSettings>('PUT', '/settings/assistant', s),
 
   // Study documents Gem reads (researcher portal)
   listDocuments: (protocolId: string) =>

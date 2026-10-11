@@ -43,7 +43,7 @@ export interface Vec3 {
 }
 
 export class ActivityTracker {
-  readonly options: ActivityOptions;
+  options: ActivityOptions;
   private lastActiveAt: number;
   private lastReason: ActivityReason = 'start';
   private lastAccel: Vec3 | null = null;
@@ -51,6 +51,11 @@ export class ActivityTracker {
   constructor(now: number, options: Partial<ActivityOptions> = {}) {
     this.options = { ...DEFAULT_ACTIVITY, ...options };
     this.lastActiveAt = now;
+  }
+
+  /** Change the idle / purge timings (they come from the portal via the session). */
+  setTimings(idleAfterMs: number, purgeAfterMs: number): void {
+    this.options = { ...this.options, idleAfterMs, purgeAfterMs };
   }
 
   get lastActivity(): { at: number; reason: ActivityReason } {

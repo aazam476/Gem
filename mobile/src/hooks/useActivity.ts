@@ -1,7 +1,8 @@
 /**
  * Inactivity detection for Gem (docs/ASSISTANT_SPEC.md §8). Listens to the accelerometer
  * and gyroscope (expo-sensors, no permission needed on iOS/Android) and exposes
- * `state`: active → idle after 1 min → expired after 10 min without activity. Other
+ * `state`: active → idle → expired without activity (1 / 10 min by default; the portal
+ * can change both, delivered with the session). Other
  * signals (speech, scene change, taps, Gem busy) are reported by the caller via `note`.
  */
 import { Accelerometer, Gyroscope } from 'expo-sensors';
@@ -21,7 +22,12 @@ export interface Activity {
   noteFrameChange: (score: number | null) => void;
 }
 
-export function useActivity(): Activity {
+export interface ActivityTimings {
+  idleAfterMs: number;
+  purgeAfterMs: number;
+}
+
+export function useActivity(timings?: ActivityTimings): Activity {
   const [tracker] = useState(() => new ActivityTracker(Date.now()));
   const [state, setState] = useState<ActivityState>('active');
 
@@ -29,6 +35,13 @@ export function useActivity(): Activity {
     const next = tracker.state(Date.now());
     setState((prev) => (prev === next ? prev : next));
   }, [tracker]);
+
+  const idleAfterMs = timings?.idleAfterMs;
+  const purgeAfterMs = timings?.purgeAfterMs;
+  // New timings take effect at the next once-a-second check.
+  useEffect(() => {
+    if (idleAfterMs && purgeAfterMs) tracker.setTimings(idleAfterMs, purgeAfterMs);
+  }, [idleAfterMs, purgeAfterMs, tracker]);
 
   // Re-check once a second (signals below also refresh immediately).
   useEffect(() => {
