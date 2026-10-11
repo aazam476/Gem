@@ -120,8 +120,10 @@ camera + frames ──(you stop talking)──▶ thinking (mic ignored) ──�
   impossible and the mic only came back via the 4 s stall watchdog after Gem finished.
   Now, on iOS, while Gem speaks the stream is paused and the **file recorder**
   (`useAudioRecorder`, play-and-record, 16 kHz WAV, level metering every 50 ms) listens;
-  `logic/bargeIn.ts` learns Gem's echo level for 0.4 s and fires when the input is ≥ 8 dB
-  louder (and ≥ -40 dBFS) for 400 ms. Then Gem stops, the recording from 300 ms before the
+  `logic/bargeIn.ts` starts only once Gem's voice is **audibly playing** (not while the
+  answer downloads), learns Gem's echo level over 0.5 s, keeps following it (frozen while a
+  possible interruption is evaluated), and fires when the input is ≥ 10 dB louder (and
+  ≥ -40 dBFS) for 400 ms. Then Gem stops, the recording from 300 ms before the
   user started is decoded and seeds the VAD (`beginUtterance`), and the stream resumes to
   capture the rest of the sentence. When Gem finishes without interruption, the stream is
   restarted immediately. Android keeps the stream running and uses the echo-mode VAD below.
