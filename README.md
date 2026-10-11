@@ -111,3 +111,7 @@ docs/      SPEC, API_CONTRACT, UI_CONTRACT, TASKS, DECISIONS, HUMAN_TESTS, PERFO
 scripts/   check.sh
 CLAUDE.md  instructions for coding agents
 ```
+
+## License
+
+[MIT](LICENSE) © 2026 Ali Azam, Diya Shah, Nithin Sai Ega
