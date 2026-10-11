@@ -1,0 +1,9 @@
+{
+  "retake_unclear": "I couldn't quite see that clearly. Can you hold the camera steady?",
+  "retake_unusual": "That reading looks unusual. Let's take it one more time to be safe.",
+  "retake_requested": "No problem. Let's take it again.",
+  "network_error": "I'm having trouble connecting right now. Let's try again in a moment.",
+  "saved": "Thank you. Your reading has been saved.",
+  "saved_flagged": "Thank you. I've saved that reading, and your study team will take a look at it.",
+  "already_saved": "That reading was already saved. You're all set."
+}

@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+backend/.env
+backend/*.db
+backend/*.db-*
+
+# Node / Expo
+node_modules/
+.expo/
+dist/
+web-build/
+mobile/.env
+mobile/.env.local
+*.tsbuildinfo
+coverage/
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/
