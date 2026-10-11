@@ -97,3 +97,18 @@ jest.mock('expo-file-system', () => {
   }
   return { Directory, File, Paths: { cache: new Directory('cache') } };
 });
+
+jest.mock('expo-sensors', () => {
+  const make = () => {
+    const listeners: ((v: { x: number; y: number; z: number }) => void)[] = [];
+    return {
+      setUpdateInterval: jest.fn(),
+      addListener: jest.fn((cb: (v: { x: number; y: number; z: number }) => void) => {
+        listeners.push(cb);
+        return { remove: jest.fn(() => listeners.splice(listeners.indexOf(cb), 1)) };
+      }),
+      emit: (v: { x: number; y: number; z: number }) => listeners.forEach((l) => l(v)),
+    };
+  };
+  return { Accelerometer: make(), Gyroscope: make() };
+});

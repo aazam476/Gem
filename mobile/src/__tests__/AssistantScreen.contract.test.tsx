@@ -35,6 +35,7 @@ function controller(state: Partial<AssistantState> = {}, extra: Partial<Assistan
     micActive: true,
     micError: null,
     frames: { sent: 12, failed: 0, lastChangeScore: 0.08, remembered: 7 },
+    activity: 'active',
     dismiss: jest.fn(),
     replay: jest.fn(),
     retry: jest.fn(),
@@ -97,6 +98,20 @@ describe('AssistantScreen contract', () => {
   it('microphone error is visible', async () => {
     await renderAssistant({}, { micError: 'busy', micActive: false });
     expect(screen.getByTestId('assistant-mic')).toHaveTextContent(/Microphone error: busy/);
+  });
+
+  it.each([
+    ['idle', 'Paused'],
+    ['expired', 'Gem is asleep'],
+  ] as const)('inactivity %s shows how to wake Gem', async (activity, text) => {
+    await renderAssistant({}, { activity });
+    expect(screen.getByTestId('assistant-idle')).toHaveTextContent(new RegExp(text));
+    expect(screen.getByTestId('assistant-idle')).toHaveTextContent(/Move your phone or speak/);
+  });
+
+  it('no inactivity banner while active', async () => {
+    await renderAssistant();
+    expect(screen.queryByTestId('assistant-idle')).toBeNull();
   });
 
   it('has no typed-question box', async () => {

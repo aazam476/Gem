@@ -20,6 +20,13 @@ jest.mock('../api/client', () => {
   };
 });
 
+let mockActivityState: 'active' | 'idle' | 'expired' = 'active';
+const mockActivityNote = jest.fn();
+const mockActivityFrame = jest.fn();
+jest.mock('../hooks/useActivity', () => ({
+  useActivity: () => ({ state: mockActivityState, note: mockActivityNote, noteFrameChange: mockActivityFrame }),
+}));
+
 let mic: SpeechCaptureOptions;
 jest.mock('../hooks/useSpeechCapture', () => ({
   useSpeechCapture: (o: SpeechCaptureOptions) => {
@@ -36,6 +43,7 @@ const gone = () => new ApiError(410, { error: 'session_expired', message: 'gone'
 let n = 0;
 beforeEach(() => {
   jest.clearAllMocks();
+  mockActivityState = 'active';
   n = 0;
   createSession.mockImplementation(async () => ({ session_id: `s-${++n}` }));
   sendFrame.mockResolvedValue({ frames_buffered: 1, frames_received: 1, kept: true, change_score: 0.12, expires_in_s: 600 });
@@ -80,6 +88,55 @@ describe('useAssistant', () => {
     } finally {
       jest.useRealTimers();
     }
+  });
+
+  it('pauses frames after a minute idle and purges the session after ten', async () => {
+    jest.useFakeTimers();
+    try {
+      const hook = await renderHook(() => useAssistant());
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(10);
+      });
+      const takePictureAsync = jest.fn(async () => ({ uri: 'file://f.jpg', width: 3000, height: 4000 }));
+      await act(async () => {
+        hook.result.current.attachCamera({ takePictureAsync } as never);
+        hook.result.current.onCameraReady();
+      });
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(2_050);
+      });
+      expect(sendFrame).toHaveBeenCalledTimes(2);
+      expect(mockActivityFrame).toHaveBeenCalledWith(0.12); // frame change fed to the activity tracker
+
+      mockActivityState = 'idle';
+      await hook.rerender({});
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(5_000);
+      });
+      expect(sendFrame).toHaveBeenCalledTimes(2); // no frames while idle
+      expect(hook.result.current.activity).toBe('idle');
+      expect(mic.enabled).toBe(true); // still listening, so speech can wake it
+
+      mockActivityState = 'expired';
+      await hook.rerender({});
+      expect(api.endSession).toHaveBeenCalledWith('s-1'); // context purged
+
+      mockActivityState = 'active'; // the user moved the phone
+      await hook.rerender({});
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(1_050);
+      });
+      expect(createSession).toHaveBeenCalledTimes(2); // a fresh context window
+      expect(sendFrame.mock.calls.at(-1)?.[0]).toBe('s-2');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('speech counts as activity', async () => {
+    await setup();
+    await act(async () => mic.onSpeechStart());
+    expect(mockActivityNote).toHaveBeenCalledWith('speech');
   });
 
   it('sends a finished utterance as WAV, shows the answer and speaks it', async () => {

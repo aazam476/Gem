@@ -20,7 +20,8 @@ const STATUS: Record<AssistantPhase, string> = {
 };
 
 export function AssistantScreen() {
-  const { state, attachCamera, onCameraReady, micActive, micError, frames, retry, replay, dismiss } = useAssistant();
+  const { state, attachCamera, onCameraReady, micActive, micError, frames, activity, retry, replay, dismiss } =
+    useAssistant();
 
   return (
     <View testID="assistant-screen" style={{ flex: 1, backgroundColor: '#000' }}>
@@ -52,6 +53,19 @@ export function AssistantScreen() {
               <AppText variant="body" tone="inverse" testID="assistant-notice">{state.notice}</AppText>
             ) : null}
           </View>
+          {activity !== 'active' && !state.answer ? (
+            <View
+              testID="assistant-idle"
+              style={{ backgroundColor: theme.color.overlay, borderRadius: theme.radius.md, padding: theme.space.sm }}
+            >
+              <AppText variant="patient" tone="inverse">
+                {activity === 'expired' ? 'Gem is asleep' : 'Paused'}
+              </AppText>
+              <AppText variant="body" tone="inverse">
+                Move your phone or speak to wake Gem.
+              </AppText>
+            </View>
+          ) : null}
           {state.phase === 'thinking' ? (
             <View testID="assistant-thinking" style={{ alignItems: 'flex-start' }}>
               <Spinner />

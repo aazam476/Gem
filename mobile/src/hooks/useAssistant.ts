@@ -22,6 +22,8 @@ import { bytesToBase64, encodeWav } from '../logic/wav';
 import { AnswerAudio } from '../services/answerAudio';
 import { prepareUpload } from '../services/image';
 import { lineText } from '../services/lines';
+import type { ActivityState } from '../logic/activity';
+import { useActivity } from './useActivity';
 import { useFrameStreamer, type FrameStats } from './useFrameStreamer';
 import { useSpeechCapture } from './useSpeechCapture';
 
@@ -34,6 +36,8 @@ export interface AssistantController {
   micActive: boolean;
   micError: string | null;
   frames: FrameStats;
+  /** active → idle (1 min: frames paused) → expired (10 min: context purged). Movement or speech wakes it. */
+  activity: ActivityState;
   /** Hide the answer image + text. */
   dismiss: () => void;
   /** Read the current answer aloud again (no new ElevenLabs charge). */
@@ -99,6 +103,9 @@ export function useAssistant(): AssistantController {
     [ensureSession],
   );
 
+  const activity = useActivity();
+  const { note, noteFrameChange } = activity;
+
   const startSession = useCallback(() => {
     ensureSession()
       .then(() => dispatch({ type: 'SESSION_READY' }))
@@ -124,11 +131,28 @@ export function useAssistant(): AssistantController {
     if (!cam) return null;
     const shot = await cam.takePictureAsync({ quality: 0.5, shutterSound: false });
     const frame = await prepareUpload(shot, { longEdge: FRAME_LONG_EDGE_PX, quality: FRAME_JPEG_QUALITY });
-    return withSession((id) => api.sendFrame(id, frame.base64));
-  }, [withSession]);
+    const ack = await withSession((id) => api.sendFrame(id, frame.base64));
+    noteFrameChange(ack.change_score);
+    return ack;
+  }, [withSession, noteFrameChange]);
 
-  // Paused while an answer is on screen: the memory keeps what the user was asking about.
-  const streaming = cameraReady && appActive && shouldStreamFrames(state);
+  // Paused while an answer is on screen (the memory keeps what the user was asking about)
+  // and after 1 minute of inactivity (no movement, speech or scene change).
+  const streaming = cameraReady && appActive && shouldStreamFrames(state) && activity.state === 'active';
+
+  // Gem thinking or talking counts as activity.
+  useEffect(() => {
+    if (state.phase === 'thinking' || state.speaking) note('busy');
+  }, [state.phase, state.speaking, note]);
+
+  // 10 minutes inactive: end the session so its context window (frames, history, audio) is
+  // purged now. The next frame or question opens a fresh session automatically.
+  useEffect(() => {
+    if (activity.state !== 'expired') return;
+    const id = session.current;
+    session.current = null;
+    if (id) void api.endSession(id).catch(() => undefined);
+  }, [activity.state]);
   const frames = useFrameStreamer(streaming, sendFrame);
 
   // -- prompts --------------------------------------------------------------------------
@@ -176,6 +200,7 @@ export function useAssistant(): AssistantController {
     echo: state.speaking,
     echoAudible: gemAudible,
     onSpeechStart: () => {
+      note('speech');
       // Barge-in: the user started talking over Gem -> stop Gem right away.
       interrupted.current = stateRef.current.speaking;
       if (stateRef.current.speaking) audio.current?.stop();
@@ -206,15 +231,19 @@ export function useAssistant(): AssistantController {
     micActive: mic.active,
     micError: mic.error,
     frames,
+    activity: activity.state,
     dismiss: () => {
+      note('interaction');
       audio.current?.stop();
       dispatch({ type: 'DISMISS' });
     },
     replay: () => {
+      note('interaction');
       const a = stateRef.current.answer;
       if (a) void audio.current?.play(a.turnId, a.audioUrl, a.answer);
     },
     retry: () => {
+      note('interaction');
       dispatch({ type: 'RETRY' });
       if (!session.current) startSession();
     },
