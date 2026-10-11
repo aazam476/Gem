@@ -191,6 +191,8 @@ Frame `frame_id` (the current view, or an earlier one) with the annotations draw
 tiny boxes drawn as rings). Kept in RAM for the last 10 answers.
 
 ### `GET /sessions/{id}/turns/{turn_id}/speech` → 200 `audio/mpeg`
-ElevenLabs `eleven_flash_v2_5` of `answer`. First request streams it while caching it
-(`X-Gem-Audio-Cache: miss`); later requests return the cached bytes (`hit`) — ElevenLabs is
-billed once per answer. Concurrent first requests wait for the same synthesis.
+ElevenLabs `eleven_flash_v2_5` of `answer`, returned whole with `Content-Length` (not
+chunked — iOS's player is unreliable with length-less streams; the app downloads the file
+and plays it locally). First request synthesizes and caches it (`X-Gem-Audio-Cache: miss`);
+later requests return the cached bytes (`hit`) — ElevenLabs is billed once per answer.
+Concurrent first requests wait for the same synthesis.

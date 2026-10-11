@@ -89,14 +89,18 @@ mic: AudioStream 16 kHz PCM → VAD
                                                   draw boxes on frame_id (may be from minutes ago)
   ◀──────────────────────────────────────────── {answer, image_url, audio_url, transcript}
 show image + text box
-  GET …/turns/{t}/speech ───────────────────────▶ first time: stream ElevenLabs ───────▶ eleven_flash_v2_5
-                                                  while caching bytes in RAM
-"Read it again" → same in-memory player (no request); a new player hits the RAM cache (no ElevenLabs call)
+mic stream STOPPED, audio session → playback (loudspeaker)
+  download GET …/turns/{t}/speech ──────────────▶ first time: ElevenLabs (whole MP3) ──▶ eleven_flash_v2_5
+  to a cache file, play it                        cached in RAM per turn
+"Read it again" → same local file + player (no request); a re-download hits the RAM cache (no ElevenLabs call)
+playback finished (or watchdog) → audio session → record, mic stream restarted
 10 min with no frame and no prompt → session purged; next call gets 410 → app opens a new session
 ```
 
-The mic is **muted while Gem is thinking or speaking**, so Gem never answers itself and a
-second question can't be queued.
+The mic is **stopped while Gem is thinking or speaking**, so Gem never answers itself, a
+second question can't be queued, and iOS leaves its record+play route (which can send
+output to the quiet earpiece) before Gem talks. A watchdog (estimated duration + a few
+seconds) restarts the mic if a "finished" event is ever lost.
 
 ## 4. Speech-to-text
 

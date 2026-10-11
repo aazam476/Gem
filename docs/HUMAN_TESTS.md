@@ -47,7 +47,8 @@ cd mobile && npx expo start          # w = portal in browser; scan QR in Expo Go
 | 2.3 | iOS: deny again until "Open Settings" appears (or deny in Settings). Tap it, enable the mic, return to the app. | Settings opens; on return the app goes straight to the camera (no restart). |
 | 2.4 | With both granted. | Full-screen back camera; status "Listening — ask me anything"; "Mic on"; "Frames sent" counts up ~1 per second. |
 | 2.5 | Point at the BP monitor, say "What does my blood pressure say?" and stop talking. | "Hearing you…" while talking; ~1 s after you stop: "Thinking…"; then the overlay with **your photo with a yellow box** on the display, the answer in the text box, and an **ElevenLabs voice** reading it. Note time from end of speech to voice. |
-| 2.6 | While Gem is speaking, keep quiet. | Gem does **not** answer itself (mic muted while speaking). |
+| 2.6 | While Gem is speaking, keep quiet. | Gem does **not** answer itself; status shows "Mic off" while it talks and "Mic on" again right after. |
+| 2.6b | If you hear nothing: watch the `npx expo start` terminal for `[gem-audio]` lines. | Expected sequence: `downloaded <turn> <bytes>` → `playing <turn>` → `finished <turn>`. `download failed` / `player never started` mean it fell back to the phone voice; report the line. |
 | 2.7 | Tap "Read it again" twice. | Same voice plays again immediately. Backend log shows only one ElevenLabs request for that answer (second GET returns `X-Gem-Audio-Cache: hit` if a new player was needed). |
 | 2.8 | Tap "Dismiss". | Overlay closes, camera visible, still listening. |
 | 2.9 | Ask a follow-up that depends on context: "Which button starts it?" | Answer refers to the same device; the start button is marked. |
