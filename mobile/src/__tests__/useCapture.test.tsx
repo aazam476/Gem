@@ -64,6 +64,9 @@ describe('useCapture', () => {
     expect((createAudioPlayer as jest.Mock).mock.calls[0][0]).toEqual({
       uri: expect.stringMatching(/\/captures\/c-1\/speech$/),
     });
+    // The mock player never reports "playing", so after the start budget the app
+    // falls back to on-device speech.
+    await waitFor(() => expect(Speech.speak).toHaveBeenCalled(), { timeout: 4000 });
   });
 
   it('goes offline on network failure and says so on-device', async () => {
