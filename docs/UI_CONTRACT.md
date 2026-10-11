@@ -79,6 +79,8 @@ Hook: `useAssistant()` →
 `{state, attachCamera, onCameraReady, micActive, micError, frames, activity, dismiss, replay, retry}`.
 Destructure it (the React Compiler lint flags member access on an object that carries a ref).
 
+No caption of the question while thinking: the transcript of the new question only arrives with the answer, so it would show the previous one.
+
 Always present: `assistant-screen` (root), `assistant-camera` (full-screen `CameraView` with
 `ref={attachCamera}`, `onCameraReady={onCameraReady}`, `facing="back"`), `assistant-status`.
 There is no typed-question input (removed on request). `frames` and `micActive` are not
@@ -88,13 +90,12 @@ rendered (diagnostics).
 |-----------|------------------|------|---------|
 | `state.phase` | `assistant-status` text (`statusLabel`): starting → "Starting…", listening → "Listening", hearing → "Hearing you", thinking → "Thinking", error → "Not connected"; "Speaking" whenever `state.speaking`; "Paused" while `activity !== 'active'` | | |
 | `micError` | `assistant-mic-error` | "Gem can't hear you" + `micError` verbatim | |
-| `phase === 'thinking'` + `state.lastTranscript` | `assistant-heard` | the question in quotes | |
 | `state.notice` | `assistant-notice` | e.g. "I didn't catch that." | |
 | listening, active, no question asked yet | `assistant-hint` | "Point at something and ask a question." | |
 | `phase === 'thinking'` | `assistant-thinking` | progress indicator | |
 | `activity !== 'active'` (and no answer shown) | `assistant-idle` | "Paused" (idle, 1 min) / "Gem is asleep" (expired, 10 min) + "Move your phone or speak to wake Gem" | none — movement or speech wakes it |
 | `phase === 'error'` | `assistant-error`, `assistant-retry` | `state.error` | `retry` |
-| `state.answer` older frame | `assistant-answer-age` (only when `frameAgeLabel(answer.frameAgeS)` is non-null) | "Seen 58 seconds ago" — the photo is NOT the current view | |
+| `state.answer` older frame | `assistant-answer-age` (only when `frameAgeLabel(answer.frameAgeS)` is non-null) | "Seen 58 seconds ago" — the photo is NOT the current view. Shown **under** the photo (with "You asked"), never on it: a portrait photo is narrow and clipped it | |
 | `state.answer` | `assistant-answer` (answer sheet), `assistant-answer-listening` (`listeningHint(phase, speaking)`: "Gem is speaking — ask your next question when it finishes." / "Listening — ask a follow-up anytime." / "Hearing you…" / "Thinking…" by `state.phase`), `assistant-answer-image` (only if `imageUri`), `assistant-answer-box` (scrollable text box), `assistant-answer-text`, `assistant-replay`, `assistant-dismiss` | `answer.imageUri` (show with `resizeMode="contain"` — the drawing is baked into the image), `answer.answer` | `replay`, `dismiss` |
 
 Constraints specific to this screen:

@@ -100,9 +100,10 @@ describe('AssistantScreen contract', () => {
     expect(screen.getByTestId('assistant-status')).toHaveTextContent(/Speaking/);
   });
 
-  it('shows the question while thinking, and transient notices', async () => {
-    await renderAssistant({ phase: 'thinking', lastTranscript: 'hello gem' });
-    expect(screen.getByTestId('assistant-heard')).toHaveTextContent(/hello gem/);
+  it('never shows the previous question while thinking about a new one, and shows notices', async () => {
+    await renderAssistant({ phase: 'thinking', lastTranscript: 'the previous question' });
+    expect(screen.queryByTestId('assistant-heard')).toBeNull();
+    expect(screen.queryByText(/the previous question/)).toBeNull();
     await renderAssistant({ lastTranscript: 'hello gem', notice: "I didn't catch that." });
     expect(screen.queryByTestId('assistant-heard')).toBeNull();
     expect(screen.getByTestId('assistant-notice')).toHaveTextContent("I didn't catch that.");
@@ -169,7 +170,7 @@ describe('AssistantScreen contract', () => {
 
   it('answer drawn on an earlier frame says when it was seen', async () => {
     await renderAssistant({ answer: { ...answer, frameAgeS: 58 } });
-    expect(screen.getByTestId('assistant-answer-age')).toHaveTextContent('Seen 58 seconds ago');
+    expect(screen.getByTestId('assistant-answer-age')).toHaveTextContent(/Seen 58 seconds ago/);
   });
 
   it('no age label for the current view', async () => {

@@ -65,15 +65,6 @@ export function AssistantScreen() {
       <SafeAreaView style={styles.chrome} pointerEvents="box-none">
         <View style={styles.top} pointerEvents="box-none">
           <StatusCapsule phase={state.phase} speaking={state.speaking} paused={paused} />
-          {state.phase === 'thinking' && state.lastTranscript ? (
-            <Animated.View entering={FADE_IN} exiting={FADE_OUT}>
-              <Glass style={styles.heard}>
-                <AppText variant="body" tone="inverse" align="center" numberOfLines={3} testID="assistant-heard" style={styles.heardText}>
-                  {`“${state.lastTranscript}”`}
-                </AppText>
-              </Glass>
-            </Animated.View>
-          ) : null}
         </View>
 
         <View style={styles.bottom} pointerEvents="box-none">
@@ -136,8 +127,6 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#000' },
   chrome: { flex: 1, justifyContent: 'space-between' },
   top: { alignItems: 'center', paddingTop: theme.space.sm, paddingHorizontal: theme.space.md, gap: theme.space.sm },
-  heard: { borderRadius: theme.radius.lg, maxWidth: 420 },
-  heardText: { paddingHorizontal: theme.space.md, paddingVertical: theme.space.sm },
   bottom: { padding: theme.space.md, gap: theme.space.sm },
   idle: { alignItems: 'center', justifyContent: 'center', padding: theme.space.lg },
   idleCard: { borderRadius: theme.radius.xl, maxWidth: 420, width: '100%' },

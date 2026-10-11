@@ -26,7 +26,7 @@ import { scheduleOnRN } from 'react-native-worklets';
 
 import { frameAgeLabel, type AssistantAnswer, type AssistantPhase } from '../../logic/assistantState';
 import { DURATION, EASE_OUT, project, rubberband, SHEET_SPRING } from '../../ui/motion';
-import { AppText, Button, Glass, Ionicons, Row } from '../../ui/primitives';
+import { AppText, Button, Pill, Row } from '../../ui/primitives';
 import { theme, useTheme } from '../../ui/theme';
 
 // Layout animation builders live at module scope (built once, not per render).
@@ -116,25 +116,21 @@ export function AnswerSheet(props: {
                     resizeMode="contain"
                     accessibilityLabel="Your camera view with Gem's markings"
                   />
-                  {age ? (
-                    <Glass style={styles.ageChip}>
-                      <Row style={styles.ageRow}>
-                        <Ionicons name="time-outline" size={16} color={color.onCamera} />
-                        <AppText variant="small" tone="inverse" weight="600" testID="assistant-answer-age">
-                          {age}
-                        </AppText>
-                      </Row>
-                    </Glass>
-                  ) : null}
                 </View>
               ) : null}
             </View>
           </GestureDetector>
 
-          {answer.transcript ? (
-            <AppText variant="small" tone="muted" numberOfLines={2} style={styles.asked}>
-              {`You asked: “${answer.transcript}”`}
-            </AppText>
+          {age || answer.transcript ? (
+            <View style={styles.meta}>
+              {/* Under the photo, not on it: a tall portrait photo is narrow and would clip it. */}
+              {age ? <Pill testID="assistant-answer-age" icon="time-outline" label={age} /> : null}
+              {answer.transcript ? (
+                <AppText variant="small" tone="muted" numberOfLines={2}>
+                  {`You asked: “${answer.transcript}”`}
+                </AppText>
+              ) : null}
+            </View>
           ) : null}
 
           <Animated.ScrollView
@@ -188,10 +184,8 @@ const styles = StyleSheet.create({
     marginTop: theme.space.sm,
     marginBottom: theme.space.sm,
   },
-  photo: { width: '100%', borderRadius: theme.radius.lg, overflow: 'hidden' },
-  ageChip: { position: 'absolute', top: theme.space.sm, left: theme.space.sm, borderRadius: theme.radius.pill },
-  ageRow: { paddingHorizontal: 12, paddingVertical: 6, gap: 6, flexWrap: 'nowrap' },
-  asked: { marginTop: theme.space.xs },
+  photo: { width: '100%', alignSelf: 'center', borderRadius: theme.radius.lg, overflow: 'hidden' },
+  meta: { gap: 6, marginTop: theme.space.xs },
   textBox: { flexGrow: 0, flexShrink: 1, maxHeight: 260 },
   textBoxContent: { paddingVertical: theme.space.xs },
   hint: { gap: theme.space.sm, flexWrap: 'nowrap' },
