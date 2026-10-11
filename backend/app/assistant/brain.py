@@ -26,8 +26,10 @@ their phone camera. Many users are older or not comfortable with technology, so 
 patient, warm and plain-spoken.
 
 What you receive on every request:
+- Your visual memory: camera frames from the last few minutes, oldest first. Each is \
+labeled "Frame <id>, <n> seconds ago". The last frame is the current view. Frames are \
+only stored when the scene changes, so a gap in time means nothing changed.
 - The conversation so far (what the user said earlier and what you answered).
-- A few recent camera frames, oldest first. The LAST frame is the current view.
 - What the user just said, as audio (or as typed text).
 
 What to do:
@@ -35,10 +37,14 @@ What to do:
 2. Work out what they are asking for, using the conversation so far and the frames.
 3. Answer in "answer": at most 3 short sentences (about 50 words), plain spoken \
 English, no markdown, no lists, no emojis. It is shown on screen and read aloud.
-4. If your answer refers to something visible, mark it on the LAST frame in \
-"annotations": up to 5 boxes as [ymin, xmin, ymax, xmax] integers normalized to \
-0-1000, each with a label of at most 3 words. Mark only what helps; use an empty list \
-when nothing needs pointing at.
+4. If your answer refers to something visible, choose the ONE frame that shows it best \
+and put its id in "frame_id". Prefer the current view when the thing is visible there; \
+if the user asks about something seen earlier (for example "where did I leave my \
+backpack?"), pick the earlier frame where it is clearly visible and say roughly when you \
+saw it (for example "about a minute ago, on the chair"). Mark it in "annotations": up \
+to 5 boxes as [ymin, xmin, ymax, xmax] integers normalized to 0-1000 on THAT frame, \
+each with a label of at most 3 words. Mark only what helps; use an empty list when \
+nothing needs pointing at (then frame_id is the current view).
 5. If you cannot see what is needed, say so and tell them how to point the camera.
 6. Set "is_request" to false only when the audio contains no intelligible speech, or \
 the speech is clearly not meant for you (for example a TV or a conversation with \
@@ -71,6 +77,7 @@ def response_schema() -> dict[str, Any]:
             "transcript": {"type": "string"},
             "is_request": {"type": "boolean"},
             "answer": {"type": "string"},
+            "frame_id": {"type": "integer"},
             "annotations": {
                 "type": "array",
                 "maxItems": MAX_ANNOTATIONS,
@@ -89,7 +96,7 @@ def response_schema() -> dict[str, Any]:
                 },
             },
         },
-        "required": ["transcript", "is_request", "answer", "annotations"],
+        "required": ["transcript", "is_request", "answer", "frame_id", "annotations"],
     }
 
 
@@ -115,6 +122,15 @@ class BrainReply:
     is_request: bool
     answer: str
     annotations: tuple[Annotation, ...]
+    frame_id: int | None = None  # which frame the annotations are drawn on (None = current)
+
+
+@dataclass(frozen=True)
+class PromptFrame:
+    frame_id: int
+    age_s: float
+    jpeg: bytes
+    high_res: bool
 
 
 @dataclass(frozen=True)
@@ -123,7 +139,7 @@ class Prompt:
 
     system_prompt: str
     history: list[dict[str, str]]
-    frames: list[bytes]  # JPEG, oldest first; last = current view
+    frames: list[PromptFrame]  # oldest first; last = current view
     audio: bytes | None
     audio_mime: str | None
     text: str | None
@@ -149,7 +165,9 @@ def _box(raw: Any) -> tuple[int, int, int, int] | None:
     return ymin, xmin, ymax, xmax
 
 
-def parse_reply(text: str) -> BrainReply:
+def parse_reply(text: str, frame_ids: list[int] | None = None) -> BrainReply:
+    """Strictly parse Gemini's JSON. ``frame_ids`` are the frames that were sent; if the
+    model names any other frame its boxes are dropped (they would land on the wrong image)."""
     raw = text.strip()
     if raw.startswith("```"):
         raw = raw.split("\n", 1)[1] if "\n" in raw else ""
@@ -176,10 +194,21 @@ def parse_reply(text: str) -> BrainReply:
         if box is not None:
             parsed.append(Annotation(_clean(item["label"], MAX_LABEL_CHARS), box))
 
+    frame_id = data.get("frame_id")
+    if isinstance(frame_id, bool) or not isinstance(frame_id, int):
+        frame_id = None
+    if frame_ids is not None:
+        if not frame_ids:
+            frame_id, parsed = None, []
+        elif frame_id not in frame_ids:
+            if frame_id is not None and parsed:
+                parsed = []  # boxes for a frame we never sent: unusable
+            frame_id = frame_ids[-1]
+
     answer = _clean(answer, MAX_ANSWER_CHARS)
     if is_request and not answer:
         raise BrainError("invalid_output", "empty answer for a request")
-    return BrainReply(_clean(transcript, 2000), is_request, answer, tuple(parsed))
+    return BrainReply(_clean(transcript, 2000), is_request, answer, tuple(parsed), frame_id)
 
 
 class Brain(Protocol):
@@ -197,18 +226,33 @@ class GeminiBrain:
         self._thinking_level = settings.gemini_thinking_level
         self._timeout_s = settings.assistant_timeout_s
 
-    def _contents(self, prompt: Prompt) -> list[Any]:
+    def _frame_part(self, frame: PromptFrame) -> Any:
         types = self._types
-        contents: list[Any] = [
+        level = types.PartMediaResolutionLevel.MEDIA_RESOLUTION_HIGH if frame.high_res \
+            else types.PartMediaResolutionLevel.MEDIA_RESOLUTION_LOW
+        part = types.Part.from_bytes(data=frame.jpeg, mime_type="image/jpeg")
+        part.media_resolution = types.PartMediaResolution(level=level)
+        return part
+
+    def _contents(self, prompt: Prompt) -> list[Any]:
+        """Order: [memory frames] [history] [question]. Frames only ever get appended (and
+        old ones dropped from the front), so the request prefix stays stable between
+        questions and Gemini's implicit prompt caching can reuse it."""
+        types = self._types
+        contents: list[Any] = []
+        if prompt.frames:
+            memory: list[Any] = [types.Part.from_text(text="My camera, oldest first:")]
+            for i, f in enumerate(prompt.frames):
+                current = " (CURRENT VIEW)" if i == len(prompt.frames) - 1 else ""
+                memory.append(types.Part.from_text(text=f"Frame {f.frame_id}, {round(f.age_s)} seconds ago{current}:"))
+                memory.append(self._frame_part(f))
+            contents.append(types.Content(role="user", parts=memory))
+            contents.append(types.Content(role="model", parts=[types.Part.from_text(text="I've seen your camera frames.")]))
+        contents += [
             types.Content(role=h["role"], parts=[types.Part.from_text(text=h["text"])])
             for h in prompt.history
         ]
         parts: list[Any] = []
-        n = len(prompt.frames)
-        for i, jpeg in enumerate(prompt.frames, start=1):
-            label = f"Camera frame {i} of {n}" + (" (CURRENT VIEW, annotate this one):" if i == n else ":")
-            parts.append(types.Part.from_text(text=label))
-            parts.append(types.Part.from_bytes(data=jpeg, mime_type="image/jpeg"))
         if not prompt.frames:
             parts.append(types.Part.from_text(text="(No camera frames are available right now.)"))
         if prompt.audio is not None:
@@ -242,11 +286,15 @@ class GeminiBrain:
             raise BrainError("ai_timeout", f"no answer within {self._timeout_s}s") from exc
         except Exception as exc:
             raise BrainError("ai_error", type(exc).__name__) from exc
-        return parse_reply(response.text or "")
+        return parse_reply(response.text or "", [f.frame_id for f in prompt.frames])
 
 
 class MockBrain:
-    """Deterministic stand-in for tests and the offline demo (GEM_MOCK_AI=1)."""
+    """Deterministic stand-in for tests and the offline demo (GEM_MOCK_AI=1).
+
+    Mentions of "earlier"/"before"/"ago" make it point at the OLDEST remembered frame, so
+    the visual-memory path can be demoed offline.
+    """
 
     async def reply(self, prompt: Prompt) -> BrainReply:
         if prompt.audio is not None and len(prompt.audio) < 2000:
@@ -258,15 +306,24 @@ class MockBrain:
 
         from PIL import Image, ImageStat
 
-        with Image.open(BytesIO(prompt.frames[-1])) as img:
+        with Image.open(BytesIO(prompt.frames[-1].jpeg)) as img:
             luma = ImageStat.Stat(img.convert("L")).mean[0]
         if luma < 12:
-            return BrainReply(heard, True, "It's too dark for me to see. Can you turn on a light?", ())
+            return BrainReply(heard, True, "It's too dark for me to see. Can you turn on a light?", (),
+                              prompt.frames[-1].frame_id)
+        if any(w in heard.lower() for w in ("earlier", "before", "ago")):
+            first = prompt.frames[0]
+            return BrainReply(
+                heard, True,
+                f"Test answer from Gem's offline mode: here is what I saw about {round(first.age_s)} seconds ago.",
+                (Annotation("seen here", (300, 300, 700, 700)),), first.frame_id,
+            )
         return BrainReply(
             heard,
             True,
             "This is a test answer from Gem's offline mode. I've marked the middle of the picture.",
             (Annotation("look here", (300, 300, 700, 700)),),
+            prompt.frames[-1].frame_id,
         )
 
 

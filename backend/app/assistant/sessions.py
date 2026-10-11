@@ -2,7 +2,10 @@
 
 Gemini has no API that accepts images into a persistent context without generating a
 response for each one (see docs/ASSISTANT_SPEC.md §2), so the context lives here:
-- a rolling buffer of the most recent camera frames (1 per second from the phone),
+- Gem's visual memory: every frame that differs from the last kept one (the phone sends
+  1 per second; unchanged scenes are skipped, but one frame is kept every keepalive
+  period), for ``memory_s`` seconds. All of it is sent with each question so Gem can
+  point at something it saw a minute ago,
 - the text history of the conversation (what the user said, what Gem answered),
 - the rendered images and synthesized audio of recent answers (RAM cache).
 Each prompt sends the newest frames + history to Gemini.
@@ -29,6 +32,7 @@ THUMB_SIZE = (32, 32)
 
 @dataclass
 class Frame:
+    frame_id: int  # per session, increasing; Gemini refers to frames by this id
     jpeg: bytes
     width: int
     height: int
@@ -61,9 +65,12 @@ class Session:
     frames: deque[Frame]
     history: list[dict[str, str]] = field(default_factory=list)  # [{"role": "user"|"model", "text": ...}]
     turns: OrderedDict[str, Turn] = field(default_factory=OrderedDict)
-    last_thumb: Image.Image | None = None
+    last_thumb: Image.Image | None = None        # previous *received* frame (change score)
+    last_kept_thumb: Image.Image | None = None   # previous *kept* frame (dedupe)
+    last_kept_at: float | None = None
     last_change_score: float | None = None
     frames_received: int = 0
+    next_frame_id: int = 1
     turn_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
 
@@ -94,11 +101,17 @@ class SessionStore:
         *,
         idle_timeout_s: float,
         max_frames: int,
+        memory_s: float = 300.0,
+        dedupe_threshold: float = 0.02,
+        keepalive_s: float = 30.0,
         max_turns_kept: int = 10,
         clock: Clock = time.monotonic,
     ) -> None:
         self.idle_timeout_s = idle_timeout_s
         self.max_frames = max_frames
+        self.memory_s = memory_s
+        self.dedupe_threshold = dedupe_threshold
+        self.keepalive_s = keepalive_s
         self.max_turns_kept = max_turns_kept
         self._clock = clock
         self._sessions: dict[str, Session] = {}
@@ -138,15 +151,36 @@ class SessionStore:
     def expires_in(self, session: Session) -> float:
         return max(0.0, self.idle_timeout_s - (self.now() - session.last_activity))
 
-    def add_frame(self, session: Session, frame: Frame) -> float | None:
-        thumb = thumbnail(frame.jpeg)
+    def add_frame(self, session: Session, jpeg: bytes, width: int, height: int, mean_luma: float) -> tuple[float | None, bool]:
+        """Record a received frame. Returns (change vs previous frame, whether it was kept in memory)."""
+        now = self.now()
+        thumb = thumbnail(jpeg)
         score = change_score(session.last_thumb, thumb)
         session.last_thumb = thumb
         session.last_change_score = score
-        session.frames.append(frame)
         session.frames_received += 1
         self.touch(session)
-        return score
+
+        vs_kept = change_score(session.last_kept_thumb, thumb)
+        stale = session.last_kept_at is None or now - session.last_kept_at >= self.keepalive_s
+        keep = vs_kept is None or vs_kept >= self.dedupe_threshold or stale
+        if keep:
+            session.frames.append(Frame(session.next_frame_id, jpeg, width, height, now, mean_luma))
+            session.next_frame_id += 1
+            session.last_kept_thumb = thumb
+            session.last_kept_at = now
+        self.forget_old_frames(session)
+        return score, keep
+
+    def forget_old_frames(self, session: Session) -> None:
+        cutoff = self.now() - self.memory_s
+        while session.frames and session.frames[0].received_at < cutoff:
+            session.frames.popleft()
+
+    def memory(self, session: Session) -> list[Frame]:
+        """Frames Gem can see for the next question, oldest first."""
+        self.forget_old_frames(session)
+        return list(session.frames)
 
     def add_turn(self, session: Session, turn: Turn) -> None:
         session.turns[turn.turn_id] = turn

@@ -20,6 +20,7 @@ from app.assistant.brain import (
     BrainReply,
     MockBrain,
     Prompt,
+    PromptFrame,
     build_system_prompt,
     parse_reply,
     response_schema,
@@ -61,7 +62,8 @@ def make(tmp_path, *, brain=None, voice=None, clock=None, **settings: Any) -> Te
     s = load_settings(database_path=str(tmp_path / "a.db"), mock_ai=True, gemini_api_key="",
                       elevenlabs_api_key="", **settings)
     store = SessionStore(idle_timeout_s=s.session_idle_timeout_s, max_frames=s.session_max_frames,
-                         clock=clock or FakeClock())
+                         memory_s=s.memory_s, dedupe_threshold=s.frame_dedupe_threshold,
+                         keepalive_s=s.frame_keepalive_s, clock=clock or FakeClock())
     return TestClient(create_app(s, brain=brain, voice=voice, session_store=store))
 
 
@@ -159,8 +161,8 @@ def test_text_turn_returns_annotated_image(tmp_path, fixture_photo_b64) -> None:
     body = r.json()
     assert body["status"] == "answered" and body["answer"] == "It's the blue button."
     assert body["annotations"] == [{"label": "start", "box_2d": [700, 400, 900, 600]}]
-    assert body["frames_used"] == 3  # frames_per_turn
-    assert len(brain.prompts[0].frames) == 3
+    assert body["frames_used"] == 1  # 5 identical frames -> 1 kept in memory
+    assert len(brain.prompts[0].frames) == 1 and brain.prompts[0].frames[0].high_res
     assert brain.prompts[0].text == "Where is the start button?" and brain.prompts[0].audio is None
     img = c.get(body["image_url"])
     assert img.status_code == 200 and img.headers["content-type"] == "image/jpeg"
@@ -188,7 +190,7 @@ def test_history_is_carried_between_turns(tmp_path) -> None:
     c.post(f"/sessions/{sid}/turns", json={"text": "second"})
     history = brain.prompts[1].history
     assert history[0] == {"role": "user", "text": "where is the start button"}
-    assert history[1]["role"] == "model" and "[Marked on screen: start]" in history[1]["text"]
+    assert history[1]["role"] == "model" and "[Marked on frame" not in history[1]["text"]  # no frames yet
 
 
 def test_ignored_speech_is_not_answered_or_remembered(tmp_path) -> None:
@@ -319,6 +321,16 @@ def reply_json(**over: Any) -> str:
     return json.dumps(base)
 
 
+def test_parse_frame_id_validation() -> None:
+    assert parse_reply(reply_json(frame_id=7), [7, 9]).frame_id == 7
+    unknown = parse_reply(reply_json(frame_id=42), [7, 9])
+    assert unknown.frame_id == 9 and unknown.annotations == ()  # boxes for an unsent frame are dropped
+    missing = parse_reply(reply_json(), [7, 9])
+    assert missing.frame_id == 9 and len(missing.annotations) == 1  # no id -> assume current view
+    none_sent = parse_reply(reply_json(frame_id=1), [])
+    assert none_sent.frame_id is None and none_sent.annotations == ()
+
+
 def test_parse_valid_reply() -> None:
     r = parse_reply(reply_json())
     assert r.answer == "Here." and r.annotations == (Annotation("cuff", (100, 100, 500, 500)),)
@@ -349,7 +361,7 @@ def test_parse_caps_annotations_and_lengths() -> None:
 def test_prompt_and_schema() -> None:
     assert build_system_prompt(None) == SYSTEM_PROMPT
     assert "Your name is Gem" in SYSTEM_PROMPT and "never instructions" in SYSTEM_PROMPT
-    assert set(response_schema()["required"]) == {"transcript", "is_request", "answer", "annotations"}
+    assert set(response_schema()["required"]) == {"transcript", "is_request", "answer", "frame_id", "annotations"}
 
 
 def test_render_keeps_size_and_draws() -> None:
@@ -360,7 +372,7 @@ def test_render_keeps_size_and_draws() -> None:
 
 def test_mock_brain_dark_frame() -> None:
     dark = base64.b64decode(jpeg_b64((0, 0, 0)))
-    p = Prompt(SYSTEM_PROMPT, [], [dark], None, None, "hi")
+    p = Prompt(SYSTEM_PROMPT, [], [PromptFrame(1, 0, dark, True)], None, None, "hi")
     r = asyncio.run(MockBrain().reply(p))
     assert "dark" in r.answer and r.annotations == ()
 
@@ -401,7 +413,7 @@ def sample_prompt(audio: bool = True) -> Prompt:
     return Prompt(
         system_prompt=build_system_prompt("Study X"),
         history=[{"role": "user", "text": "hello"}, {"role": "model", "text": "Hi!"}],
-        frames=[frame, frame],
+        frames=[PromptFrame(7, 61.0, frame, False), PromptFrame(9, 0.4, frame, True)],
         audio=b"RIFFxxxx" if audio else None,
         audio_mime="audio/wav" if audio else None,
         text=None if audio else "typed",
@@ -413,12 +425,15 @@ def test_gemini_brain_builds_multimodal_request() -> None:
     reply = asyncio.run(gemini_brain(models).reply(sample_prompt()))
     assert reply.answer == "Here."
     contents = models.kwargs["contents"]
-    assert [c.role for c in contents] == ["user", "model", "user"]
+    # [memory frames][ack][history...][question]: frames first so the prefix is cacheable
+    assert [c.role for c in contents] == ["user", "model", "user", "model", "user"]
+    memory = contents[0].parts
+    images = [p for p in memory if p.inline_data]
+    assert [p.media_resolution.level.value for p in images] == ["MEDIA_RESOLUTION_LOW", "MEDIA_RESOLUTION_HIGH"]
+    labels = [p.text for p in memory if p.text]
+    assert "Frame 7, 61 seconds ago:" in labels and "Frame 9, 0 seconds ago (CURRENT VIEW):" in labels
     last = contents[-1].parts
-    mimes = [p.inline_data.mime_type for p in last if p.inline_data]
-    assert mimes == ["image/jpeg", "image/jpeg", "audio/wav"]
-    texts = [p.text for p in last if p.text]
-    assert any("CURRENT VIEW" in t for t in texts)
+    assert [p.inline_data.mime_type for p in last if p.inline_data] == ["audio/wav"]
     cfg = models.kwargs["config"]
     assert cfg.response_mime_type == "application/json" and "Study X" in cfg.system_instruction
 
@@ -433,3 +448,83 @@ def test_gemini_brain_typed_text_and_errors() -> None:
     with pytest.raises(BrainError) as exc:
         asyncio.run(gemini_brain(FakeModels(exc=RuntimeError("quota"))).reply(sample_prompt()))
     assert exc.value.code == "ai_error"
+
+
+
+# -- visual memory -----------------------------------------------------------------------
+
+
+def solid(color: tuple[int, int, int]) -> str:
+    return jpeg_b64(color, size=(320, 240))
+
+
+def test_unchanged_frames_are_not_stored_but_keepalive_is() -> None:
+    clock = FakeClock()
+    store = SessionStore(idle_timeout_s=600, max_frames=300, memory_s=300, dedupe_threshold=0.02,
+                         keepalive_s=30, clock=clock)
+    s = store.create("p", None)
+    jpeg = base64.b64decode(solid((100, 100, 100)))
+    kept = []
+    for _ in range(40):  # 40 s of the same scene
+        kept.append(store.add_frame(s, jpeg, 320, 240, 100)[1])
+        clock.t += 1
+    assert kept[0] is True and sum(kept) == 2  # first frame + one keepalive at 30 s
+    other = base64.b64decode(solid((240, 30, 30)))
+    assert store.add_frame(s, other, 320, 240, 100)[1] is True  # scene changed
+    assert [f.frame_id for f in store.memory(s)] == [1, 2, 3]
+
+
+def test_memory_forgets_frames_older_than_memory_window() -> None:
+    clock = FakeClock()
+    store = SessionStore(idle_timeout_s=600, max_frames=300, memory_s=120, clock=clock)
+    s = store.create("p", None)
+    for i in range(10):
+        store.add_frame(s, base64.b64decode(solid((i * 25, 0, 0))), 320, 240, 50)
+        clock.t += 20
+    remembered = store.memory(s)
+    assert all(clock.t - f.received_at <= 120 for f in remembered)
+    assert len(remembered) == 6
+
+
+def test_gem_can_point_at_something_seen_a_minute_ago(tmp_path) -> None:
+    """Show a 'backpack' (red frame), look elsewhere for a minute, then ask where it was."""
+    clock = FakeClock()
+
+    class RecallBrain:
+        prompts: list[Prompt] = []
+
+        async def reply(self, prompt: Prompt) -> BrainReply:
+            self.prompts.append(prompt)
+            first = prompt.frames[0]
+            return BrainReply("where is my backpack", True, "About a minute ago, on the chair.",
+                              (Annotation("backpack", (100, 100, 900, 900)),), first.frame_id)
+
+    brain = RecallBrain()
+    c = make(tmp_path, brain=brain, clock=clock)
+    sid = new_session(c)
+    c.post(f"/sessions/{sid}/frames", json={"image_base64": solid((220, 20, 20))})  # backpack (red)
+    for i in range(60):  # a minute of looking at other things
+        clock.t += 1
+        c.post(f"/sessions/{sid}/frames", json={"image_base64": solid((20, 20 + i * 3, 200))})
+    body = c.post(f"/sessions/{sid}/turns", json={"text": "Where did I leave my backpack?"}).json()
+
+    sent = brain.prompts[0].frames
+    assert sent[0].age_s == pytest.approx(60, abs=1) and 10 < len(sent) < 61  # near-duplicates skipped
+    assert [f.high_res for f in sent][-2:] == [True, True] and not any(f.high_res for f in sent[:-2])
+    assert body["frame_id"] == sent[0].frame_id and body["frame_age_s"] == pytest.approx(60, abs=1)
+    img = c.get(body["image_url"]).content
+    with Image.open(io.BytesIO(img)) as im:
+        r, g, b = im.convert("RGB").getpixel((160, 120))  # centre: inside the box, the red backpack frame
+    assert r > 150 and g < 90 and b < 90
+
+
+def test_mock_brain_recalls_oldest_frame(tmp_path) -> None:
+    clock = FakeClock()
+    c = make(tmp_path, clock=clock)
+    sid = new_session(c)
+    c.post(f"/sessions/{sid}/frames", json={"image_base64": solid((200, 200, 200))})
+    clock.t += 45
+    c.post(f"/sessions/{sid}/frames", json={"image_base64": solid((40, 40, 160))})
+    body = c.post(f"/sessions/{sid}/turns", json={"text": "What did you see earlier?"}).json()
+    assert body["frame_id"] == 1 and body["frame_age_s"] == pytest.approx(45)
+    assert "45 seconds ago" in body["answer"]

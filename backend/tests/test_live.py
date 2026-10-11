@@ -45,15 +45,38 @@ def test_elevenlabs_returns_audio() -> None:
 def test_assistant_answers_about_fixture_photo() -> None:
     import base64
 
-    from app.assistant.brain import GeminiBrain, Prompt, build_system_prompt
+    from app.assistant.brain import GeminiBrain, Prompt, PromptFrame, build_system_prompt
 
     settings = load_settings()
     assert settings.gemini_api_key, "GEMINI_API_KEY missing"
     image = prepare_image(base64.b64encode((FIXTURES / "bp_monitor_synthetic.jpg").read_bytes()).decode(),
                           max_bytes=10**7, long_edge=768)
-    prompt = Prompt(build_system_prompt(None), [], [image.jpeg], None, None,
+    prompt = Prompt(build_system_prompt(None), [], [PromptFrame(1, 0, image.jpeg, True)], None, None,
                     "What is my blood pressure, and where is the start button?")
     reply = asyncio.run(GeminiBrain(settings).reply(prompt))
     print(reply)
     assert reply.is_request and "128" in reply.answer
     assert reply.annotations, "expected Gemini to mark something"
+
+
+def test_assistant_recalls_an_earlier_frame() -> None:
+    """The monitor was seen 60 s ago; the current view is a blank wall."""
+    import base64
+    import io
+
+    from PIL import Image
+
+    from app.assistant.brain import GeminiBrain, Prompt, PromptFrame, build_system_prompt
+
+    settings = load_settings()
+    assert settings.gemini_api_key, "GEMINI_API_KEY missing"
+    monitor = prepare_image(base64.b64encode((FIXTURES / "bp_monitor_synthetic.jpg").read_bytes()).decode(),
+                            max_bytes=10**7, long_edge=768).jpeg
+    buf = io.BytesIO()
+    Image.new("RGB", (768, 576), (205, 200, 190)).save(buf, format="JPEG")
+    wall = buf.getvalue()
+    frames = [PromptFrame(1, 60, monitor, False)] + [PromptFrame(i, 60 - i * 10, wall, i >= 5) for i in range(2, 7)]
+    reply = asyncio.run(GeminiBrain(settings).reply(
+        Prompt(build_system_prompt(None), [], frames, None, None, "Where was the blood pressure monitor?")))
+    print(reply)
+    assert reply.frame_id == 1 and reply.annotations

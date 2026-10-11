@@ -60,8 +60,14 @@ class Settings:
     assistant_model: str = "gemini-3.8-flash"
     assistant_timeout_s: float = 20.0
     session_idle_timeout_s: float = 600.0  # purge a context window after 10 min without frames or prompts
-    session_max_frames: int = 10           # rolling frame buffer per session
-    frames_per_turn: int = 3               # most recent frames attached to each prompt
+    # Visual memory: frames that differ from the last kept one (plus one every
+    # frame_keepalive_s) are kept for memory_s seconds and ALL of them go to Gemini with
+    # each question, so Gem can point at something it saw minutes ago.
+    memory_s: float = 300.0
+    session_max_frames: int = 300          # hard cap on kept frames per session
+    frame_dedupe_threshold: float = 0.02   # change_score below this = same scene, not kept
+    frame_keepalive_s: float = 30.0        # keep one frame this often even if nothing changes
+    high_res_recent_frames: int = 2        # newest frames sent at high resolution, rest low
     frame_long_edge: int = 768
     max_history_turns: int = 20
     max_audio_bytes: int = 4_000_000
@@ -95,8 +101,11 @@ def load_settings(**overrides: object) -> Settings:
         assistant_model=os.getenv("GEMINI_ASSISTANT_MODEL", "gemini-3.8-flash"),
         assistant_timeout_s=_float("GEM_ASSISTANT_TIMEOUT_S", 20.0),
         session_idle_timeout_s=_float("GEM_SESSION_IDLE_TIMEOUT_S", 600.0),
-        session_max_frames=int(_float("GEM_SESSION_MAX_FRAMES", 10)),
-        frames_per_turn=int(_float("GEM_FRAMES_PER_TURN", 3)),
+        memory_s=_float("GEM_MEMORY_S", 300.0),
+        session_max_frames=int(_float("GEM_SESSION_MAX_FRAMES", 300)),
+        frame_dedupe_threshold=_float("GEM_FRAME_DEDUPE_THRESHOLD", 0.02),
+        frame_keepalive_s=_float("GEM_FRAME_KEEPALIVE_S", 30.0),
+        high_res_recent_frames=int(_float("GEM_HIGH_RES_RECENT_FRAMES", 2)),
         cors_origins=_list(
             "GEM_CORS_ORIGINS", ["http://localhost:8081", "http://localhost:19006"]
         ),

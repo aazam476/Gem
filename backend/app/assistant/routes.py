@@ -21,9 +21,9 @@ from ..config import Settings
 from ..imaging import ImageError, prepare_image
 from ..schemas import ID_PATTERN
 from ..voice import ElevenLabsVoice, VoiceError
-from .brain import Brain, BrainError, Prompt, build_system_prompt
+from .brain import Brain, BrainError, Prompt, PromptFrame, build_system_prompt
 from .render import render
-from .sessions import Frame, Session, SessionExpired, SessionNotFound, SessionStore, Turn
+from .sessions import Session, SessionExpired, SessionNotFound, SessionStore, Turn
 
 log = logging.getLogger("gem.assistant")
 
@@ -45,6 +45,7 @@ class SessionCreate(BaseModel):
 class SessionOut(BaseModel):
     session_id: str
     idle_timeout_s: float
+    memory_s: float
     expires_in_s: float
     frame_interval_ms: int
     frames_buffered: int
@@ -59,8 +60,9 @@ class FrameIn(BaseModel):
 
 
 class FrameOut(BaseModel):
-    frames_buffered: int
+    frames_buffered: int = Field(description="Frames in Gem's visual memory")
     frames_received: int
+    kept: bool = Field(description="False when the scene had not changed since the last kept frame")
     change_score: float | None = Field(description="0 = identical to previous frame, 1 = completely different")
     expires_in_s: float
 
@@ -96,6 +98,8 @@ class TurnOut(BaseModel):
     image_url: str | None
     image_width: int
     image_height: int
+    frame_id: int | None = Field(description="Memory frame the image shows / the boxes are on")
+    frame_age_s: float | None = Field(description="How long before the question that frame was taken")
     audio_url: str | None
     frames_used: int
     latency_ms: float
@@ -125,9 +129,10 @@ def build_router(
         return SessionOut(
             session_id=s.session_id,
             idle_timeout_s=store.idle_timeout_s,
+            memory_s=store.memory_s,
             expires_in_s=round(store.expires_in(s), 1),
             frame_interval_ms=1000,
-            frames_buffered=len(s.frames),
+            frames_buffered=len(store.memory(s)),
             frames_received=s.frames_received,
             turns=len(s.turns),
             study_context=bool(s.study_context),
@@ -158,10 +163,11 @@ def build_router(
             img = prepare_image(body.image_base64, max_bytes=3_000_000, long_edge=settings.frame_long_edge)
         except ImageError as exc:
             return _error(422, "bad_image", str(exc))
-        score = store.add_frame(s, Frame(img.jpeg, img.width, img.height, store.now(), img.mean_luma))
+        score, kept = store.add_frame(s, img.jpeg, img.width, img.height, img.mean_luma)
         return FrameOut(
             frames_buffered=len(s.frames),
             frames_received=s.frames_received,
+            kept=kept,
             change_score=score,
             expires_in_s=round(store.expires_in(s), 1),
         )
@@ -184,11 +190,16 @@ def build_router(
 
         async with s.turn_lock:
             store.touch(s)  # a prompt counts as activity
-            frames = list(s.frames)[-settings.frames_per_turn:]
+            asked_at = store.now()
+            frames = store.memory(s)  # the whole visual memory, oldest first
+            n_high = settings.high_res_recent_frames
             prompt = Prompt(
                 system_prompt=build_system_prompt(s.study_context),
                 history=s.history[-2 * settings.max_history_turns:],
-                frames=[f.jpeg for f in frames],
+                frames=[
+                    PromptFrame(f.frame_id, round(asked_at - f.received_at, 1), f.jpeg, i >= len(frames) - n_high)
+                    for i, f in enumerate(frames)
+                ],
                 audio=audio,
                 audio_mime=(body.audio_mime or "audio/wav") if audio is not None else None,
                 text=body.text.strip() if body.text is not None else None,
@@ -208,14 +219,19 @@ def build_router(
             if not reply.is_request:
                 return TurnOut(turn_id=turn_id, status="ignored", transcript=reply.transcript, answer="",
                                annotations=[], image_url=None, image_width=0, image_height=0,
+                               frame_id=None, frame_age_s=None,
                                audio_url=None, frames_used=len(frames), latency_ms=latency_ms)
 
             image_jpeg, w, h = (None, 0, 0)
-            if frames:
-                image_jpeg, w, h = await asyncio.to_thread(render, frames[-1].jpeg, reply.annotations)
+            shown = next((f for f in frames if f.frame_id == reply.frame_id), frames[-1] if frames else None)
+            if shown is not None:
+                image_jpeg, w, h = await asyncio.to_thread(render, shown.jpeg, reply.annotations)
 
             s.history.append({"role": "user", "text": reply.transcript or (body.text or "")})
-            marked = f" [Marked on screen: {', '.join(a.label for a in reply.annotations)}]" if reply.annotations else ""
+            marked = (
+                f" [Marked on frame {shown.frame_id}: {', '.join(a.label for a in reply.annotations)}]"
+                if reply.annotations and shown is not None else ""
+            )
             s.history.append({"role": "model", "text": reply.answer + marked})
             del s.history[: max(0, len(s.history) - 2 * settings.max_history_turns)]
 
@@ -229,6 +245,8 @@ def build_router(
                 turn_id=turn_id, status="answered", transcript=reply.transcript, answer=reply.answer,
                 annotations=[AnnotationOut(**a.as_dict()) for a in reply.annotations],
                 image_url=f"{base}/image" if image_jpeg else None, image_width=w, image_height=h,
+                frame_id=shown.frame_id if shown else None,
+                frame_age_s=round(asked_at - shown.received_at, 1) if shown else None,
                 audio_url=f"{base}/speech" if voice is not None else None,
                 frames_used=len(frames), latency_ms=latency_ms,
             )

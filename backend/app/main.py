@@ -100,7 +100,11 @@ def create_app(
         log.warning("GEMINI_API_KEY is not set: using the mock vision model.")
 
     sessions = session_store if session_store is not None else SessionStore(
-        idle_timeout_s=settings.session_idle_timeout_s, max_frames=settings.session_max_frames
+        idle_timeout_s=settings.session_idle_timeout_s,
+        max_frames=settings.session_max_frames,
+        memory_s=settings.memory_s,
+        dedupe_threshold=settings.frame_dedupe_threshold,
+        keepalive_s=settings.frame_keepalive_s,
     )
     brain_client = brain or make_brain(settings)
 
