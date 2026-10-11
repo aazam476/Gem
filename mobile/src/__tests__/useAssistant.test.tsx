@@ -187,7 +187,7 @@ describe('useAssistant', () => {
     await waitFor(() => expect(result.current.state.phase).toBe('listening'));
   });
 
-  it('replays from the cached player without a new request', async () => {
+  it('replays from the cached file without a new request', async () => {
     const player = {
       playing: false, play: jest.fn(), pause: jest.fn(), remove: jest.fn(), seekTo: jest.fn(async () => undefined),
       addListener: jest.fn((_e: string, cb: (s: { playing: boolean; didJustFinish: boolean }) => void) => {
@@ -202,7 +202,9 @@ describe('useAssistant', () => {
     await waitFor(() => expect(player.play).toHaveBeenCalledTimes(1));
     await act(async () => result.current.replay());
     await waitFor(() => expect(player.play).toHaveBeenCalledTimes(2));
-    expect(createAudioPlayer).toHaveBeenCalledTimes(1);
+    const { File } = jest.requireMock('expo-file-system');
+    expect(File.downloadFileAsync).toHaveBeenCalledTimes(1); // no second download
+    expect(sendTurn).toHaveBeenCalledTimes(1);
   });
 
   it('does not listen while Gem speaks, and listens again as soon as it finishes', async () => {

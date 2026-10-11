@@ -2,8 +2,9 @@
  * Plays Gem's answers.
  *
  * ElevenLabs audio is downloaded once per answer to a file in the app cache and played
- * from there (iOS's player is unreliable with HTTP streams). The file and its player are
- * kept, so "read it again" replays locally with no network request; the backend also
+ * from there (iOS's player is unreliable with HTTP streams). The file is kept, so "Read
+ * again" replays locally with no network request — on a fresh player each time, because a
+ * player that already played to the end doesn't reliably play again; the backend also
  * caches the bytes, so ElevenLabs is billed once per answer either way.
  *
  * The mic is ignored while Gem speaks; the audio session stays "play and record" routed
@@ -81,6 +82,12 @@ export class AnswerAudio {
     }
 
     let entry = this.cache.get(turnId);
+    if (entry?.file) {
+      // Replay: a fresh player on the cached file. Reusing a player that already played to
+      // the end was unreliable (it restarted from the end, never reported "playing", and
+      // every other "Read again" fell back to the phone's voice or stayed silent).
+      entry = this.renew(turnId, entry);
+    }
     if (!entry) {
       try {
         entry = await this.load(turnId, absoluteUrl(audioUrl));
@@ -125,8 +132,17 @@ export class AnswerAudio {
           this.onSpeaking(false);
         }
       });
-      void player.seekTo(0).catch(() => undefined);
-      player.play();
+      if (entry.file) {
+        player.play(); // a fresh player starts at the beginning
+      } else {
+        // Web reuses its streaming player: rewind first, and wait for it.
+        void player
+          .seekTo(0)
+          .catch(() => undefined)
+          .then(() => {
+            if (gen === this.generation) player.play();
+          });
+      }
     });
     this.cancelStart = null;
     if (gen !== this.generation) return 'remote';
@@ -145,7 +161,16 @@ export class AnswerAudio {
     } catch {
       // never loaded
     }
-    this.forget(turnId);
+    if (entry.file) {
+      // Keep the downloaded file; the next replay gets a fresh player on it.
+      try {
+        player.remove();
+      } catch {
+        // already released
+      }
+    } else {
+      this.forget(turnId);
+    }
     this.speak(text, gen);
     return 'device';
   }
@@ -230,6 +255,19 @@ export class AnswerAudio {
         this.onSpeaking(false);
       }
     }, ms);
+  }
+
+  /** Replace the cached entry's player with a new one on the same local file. */
+  private renew(turnId: string, entry: Cached): Cached {
+    try {
+      entry.player.remove();
+    } catch {
+      // already released
+    }
+    if (this.current === entry.player) this.current = null;
+    const renewed: Cached = { player: createAudioPlayer({ uri: entry.file!.uri }), file: entry.file };
+    this.cache.set(turnId, renewed);
+    return renewed;
   }
 
   private remember(turnId: string, entry: Cached): void {

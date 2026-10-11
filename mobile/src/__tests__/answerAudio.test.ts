@@ -38,26 +38,52 @@ beforeEach(() => jest.clearAllMocks());
 afterEach(() => made.splice(0).forEach((a) => a.clear())); // cancels watchdog timers
 
 describe('AnswerAudio', () => {
-  it('plays ElevenLabs audio and replays from the same in-memory player', async () => {
-    const player = playablePlayer();
-    (createAudioPlayer as jest.Mock).mockReturnValue(player);
+  it('plays ElevenLabs audio once downloaded, and replays from the same file with a fresh player', async () => {
+    const players = [playablePlayer(), playablePlayer()];
+    (createAudioPlayer as jest.Mock).mockReturnValueOnce(players[0]).mockReturnValueOnce(players[1]);
     const speaking: boolean[] = [];
     const audio = new TrackedAudio((s) => speaking.push(s));
 
     await expect(audio.play('t1', '/sessions/s/turns/t1/speech', 'Hi')).resolves.toBe('remote');
+    players[0].finish();
     await expect(audio.play('t1', '/sessions/s/turns/t1/speech', 'Hi')).resolves.toBe('remote');
 
-    expect(createAudioPlayer).toHaveBeenCalledTimes(1); // replay did not refetch
-    expect(File.downloadFileAsync).toHaveBeenCalledTimes(1); // downloaded once, played from the file
-    expect((createAudioPlayer as jest.Mock).mock.calls[0][0]).toEqual({ uri: expect.stringMatching(/gem-answers\/t1\.mp3$/) });
+    expect(File.downloadFileAsync).toHaveBeenCalledTimes(1); // downloaded once: replay needs no network
+    const uris = (createAudioPlayer as jest.Mock).mock.calls.map((c) => c[0].uri);
+    expect(uris).toHaveLength(2);
+    expect(uris[0]).toMatch(/gem-answers\/t1\.mp3$/);
+    expect(uris[1]).toBe(uris[0]); // same local file
+    expect(players[0].remove).toHaveBeenCalled(); // the finished player is released
     // output is forced to the loudspeaker, not the earpiece
     expect(setAudioModeAsync).toHaveBeenCalledWith(expect.objectContaining({ allowsRecording: true, shouldRouteThroughEarpiece: false }));
-    expect(player.play).toHaveBeenCalledTimes(2);
-    expect(player.seekTo).toHaveBeenCalledWith(0);
+    expect(players[1].play).toHaveBeenCalledTimes(1);
     expect(speaking).toContain(true);
-    player.finish();
+    players[1].finish();
     expect(speaking[speaking.length - 1]).toBe(false);
     expect(Speech.speak).not.toHaveBeenCalled();
+  });
+
+  it('Read again works every time (regression: every other replay used the phone voice or was silent)', async () => {
+    // Like the real player: once it has played to the end, play() on it does nothing.
+    const made: ReturnType<typeof playablePlayer>[] = [];
+    (createAudioPlayer as jest.Mock).mockImplementation(() => {
+      const p = playablePlayer();
+      const realPlay = p.play.getMockImplementation()!;
+      let used = false;
+      p.play.mockImplementation(() => {
+        if (!used) realPlay();
+        used = true;
+      });
+      made.push(p);
+      return p;
+    });
+    const audio = new TrackedAudio(() => undefined);
+    for (let i = 0; i < 5; i++) {
+      await expect(audio.play('t1', '/a', 'x')).resolves.toBe('remote');
+      made[made.length - 1].finish();
+    }
+    expect(Speech.speak).not.toHaveBeenCalled();
+    expect(File.downloadFileAsync).toHaveBeenCalledTimes(1);
   });
 
   it('moves the mic aside BEFORE playing, also for an instant replay (regression: Read again was silent)', async () => {
@@ -130,8 +156,8 @@ describe('AnswerAudio', () => {
       await jest.advanceTimersByTimeAsync(3500);
       await expect(pending).resolves.toBe('device');
       expect(Speech.speak).toHaveBeenCalledWith('Fallback text', expect.anything());
-      expect(audio.cached).toBe(0); // the broken player is dropped
-      expect(silent.remove).toHaveBeenCalled();
+      expect(silent.remove).toHaveBeenCalled(); // the broken player is dropped...
+      expect(audio.cached).toBe(1); // ...but the downloaded file is kept for the next replay
     } finally {
       jest.useRealTimers();
     }
