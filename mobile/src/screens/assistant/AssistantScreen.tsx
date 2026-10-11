@@ -18,6 +18,7 @@ import { DURATION, EASE_OUT } from '../../ui/motion';
 import { AppText, Button, Glass, Ionicons } from '../../ui/primitives';
 import { theme, useTheme } from '../../ui/theme';
 import { AnswerSheet } from './AnswerSheet';
+import { MuteButton } from './MuteButton';
 import { StatusCapsule } from './StatusCapsule';
 
 // Toast-style messages enter from the bottom and leave the same way (250 / 200 ms).
@@ -28,7 +29,8 @@ const FADE_OUT = FadeOut.duration(DURATION.exit).easing(EASE_OUT);
 
 export function AssistantScreen() {
   const { color } = useTheme();
-  const { state, attachCamera, onCameraReady, pictureSize, micError, activity, retry, replay, dismiss } = useAssistant();
+  const { state, attachCamera, onCameraReady, pictureSize, micError, activity, retry, replay, dismiss, muted, toggleMute } =
+    useAssistant();
   const paused = activity !== 'active';
   const ready = state.phase === 'listening' || state.phase === 'hearing';
 
@@ -55,7 +57,7 @@ export function AssistantScreen() {
                 {activity === 'expired' ? 'Gem is asleep' : 'Paused'}
               </AppText>
               <AppText variant="patient" tone="inverseMuted" align="center">
-                Move your phone or speak to wake Gem.
+                {muted ? 'Move your phone to wake Gem.' : 'Move your phone or speak to wake Gem.'}
               </AppText>
             </View>
           </Glass>
@@ -64,7 +66,7 @@ export function AssistantScreen() {
 
       <SafeAreaView style={styles.chrome} pointerEvents="box-none">
         <View style={styles.top} pointerEvents="box-none">
-          <StatusCapsule phase={state.phase} speaking={state.speaking} paused={paused} />
+          <StatusCapsule phase={state.phase} speaking={state.speaking} paused={paused} muted={muted} />
         </View>
 
         <View style={styles.bottom} pointerEvents="box-none">
@@ -104,7 +106,7 @@ export function AssistantScreen() {
                 </AppText>
               </Glass>
             </Animated.View>
-          ) : ready && !paused && !state.lastTranscript && !state.answer ? (
+          ) : ready && !paused && !muted && !state.lastTranscript && !state.answer ? (
             <Animated.View key="hint" entering={MESSAGE_IN} exiting={MESSAGE_OUT}>
               <Glass style={styles.toast}>
                 <AppText variant="patient" tone="inverse" align="center" testID="assistant-hint" style={styles.toastText}>
@@ -117,14 +119,30 @@ export function AssistantScreen() {
       </SafeAreaView>
 
       {state.answer ? (
-        <AnswerSheet answer={state.answer} phase={state.phase} speaking={state.speaking} onReplay={replay} onDismiss={dismiss} />
+        <AnswerSheet
+          answer={state.answer}
+          phase={state.phase}
+          speaking={state.speaking}
+          muted={muted}
+          onReplay={replay}
+          onDismiss={dismiss}
+        />
       ) : null}
+
+      {/* Top right, above everything (also the answer sheet), like a call's mute button. */}
+      <SafeAreaView style={styles.muteLayer} pointerEvents="box-none">
+        <View style={styles.muteSlot}>
+          <MuteButton muted={muted} onPress={toggleMute} />
+        </View>
+      </SafeAreaView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#000' },
+  muteLayer: { position: 'absolute', top: 0, right: 0 },
+  muteSlot: { paddingTop: theme.space.sm, paddingRight: theme.space.md },
   chrome: { flex: 1, justifyContent: 'space-between' },
   top: { alignItems: 'center', paddingTop: theme.space.sm, paddingHorizontal: theme.space.md, gap: theme.space.sm },
   bottom: { padding: theme.space.md, gap: theme.space.sm },

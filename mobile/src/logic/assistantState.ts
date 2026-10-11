@@ -37,6 +37,8 @@ export interface AssistantState {
   lastTranscript: string | null;
   error: string | null;
   notice: string | null; // transient, non-blocking ("I didn't catch that")
+  /** The user muted Gem: nothing they say is heard or sent (frames still flow). */
+  userMuted: boolean;
 }
 
 export type AssistantEvent =
@@ -51,6 +53,7 @@ export type AssistantEvent =
   | { type: 'SPEAKING'; speaking: boolean }
   | { type: 'DISMISS' }
   | { type: 'CLEAR_NOTICE' }
+  | { type: 'SET_MUTED'; muted: boolean }
   | { type: 'RETRY' };
 
 export const initialAssistantState: AssistantState = {
@@ -60,14 +63,17 @@ export const initialAssistantState: AssistantState = {
   lastTranscript: null,
   error: null,
   notice: null,
+  userMuted: false,
 };
 
 /**
  * The mic is ignored while Gem is answering: thinking (no queued second prompt) and
- * speaking (Gem's own voice would be heard as a question). The user speaks when Gem is quiet.
+ * speaking (Gem's own voice would be heard as a question), and while the user has muted
+ * Gem. The user speaks when Gem is quiet. Muting drops any partial utterance (the capture
+ * hook resets its detector when `muted` changes), so only speech that ends unmuted is sent.
  */
 export function isMicMuted(s: AssistantState): boolean {
-  return s.phase === 'starting' || s.phase === 'thinking' || s.speaking;
+  return s.userMuted || s.phase === 'starting' || s.phase === 'thinking' || s.speaking;
 }
 
 /** How long a transient notice ("I didn't catch that") stays on screen. */
@@ -109,6 +115,9 @@ export function assistantReducer(s: AssistantState, e: AssistantEvent): Assistan
       return { ...s, answer: null, speaking: false };
     case 'CLEAR_NOTICE':
       return s.notice ? { ...s, notice: null } : s;
+    case 'SET_MUTED':
+      // Muting mid-sentence drops that sentence: it is never sent as a question.
+      return { ...s, userMuted: e.muted, phase: e.muted && s.phase === 'hearing' ? 'listening' : s.phase };
     case 'RETRY':
       return s.phase === 'error' ? { ...s, phase: 'listening', error: null } : s;
   }

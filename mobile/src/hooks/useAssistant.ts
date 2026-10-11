@@ -48,6 +48,9 @@ export interface AssistantController {
   replay: () => void;
   /** Leave the error state and try again. */
   retry: () => void;
+  /** The user's mute: while true nothing they say is heard or sent. */
+  muted: boolean;
+  toggleMute: () => void;
 }
 
 export function useAssistant(): AssistantController {
@@ -260,6 +263,11 @@ export function useAssistant(): AssistantController {
       note('interaction');
       dispatch({ type: 'RETRY' });
       if (!session.current) startSession();
+    },
+    muted: state.userMuted,
+    toggleMute: () => {
+      note('interaction');
+      dispatch({ type: 'SET_MUTED', muted: !state.userMuted });
     },
   };
 }

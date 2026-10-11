@@ -76,7 +76,7 @@ Copy must say that **both** camera and microphone are required, and show each on
 ## Assistant — `AssistantScreen` (native; web preview at `?patient`)
 
 Hook: `useAssistant()` →
-`{state, attachCamera, onCameraReady, micActive, micError, frames, activity, dismiss, replay, retry}`.
+`{state, attachCamera, onCameraReady, pictureSize, micActive, micError, frames, activity, dismiss, replay, retry, muted, toggleMute}`.
 Destructure it (the React Compiler lint flags member access on an object that carries a ref).
 
 No caption of the question while thinking: the transcript of the new question only arrives with the answer, so it would show the previous one.
@@ -89,6 +89,8 @@ rendered (diagnostics).
 | Condition | Required testIDs | Data | Actions |
 |-----------|------------------|------|---------|
 | `state.phase` | `assistant-status` text (`statusLabel`): starting → "Starting…", listening → "Listening", hearing → "Hearing you", thinking → "Thinking", error → "Not connected"; "Speaking" whenever `state.speaking`; "Paused" while `activity !== 'active'` | | |
+| always | `assistant-mute` (round glass button, top right, above the answer sheet too; `assistant-mute-icon-on` white mic / `assistant-mute-icon-off` red slashed mic; accessibility label "Mute microphone" / "Unmute microphone") | `muted` | `toggleMute` |
+| `muted` | `assistant-status` says "Muted" (while listening); no first-run hint; idle card says "Move your phone to wake Gem."; answer hint "Muted — tap the microphone to ask a follow-up." | | |
 | `micError` | `assistant-mic-error` | "Gem can't hear you" + `micError` verbatim | |
 | `state.notice` | `assistant-notice` | e.g. "I didn't catch that." | |
 | listening, active, no question asked yet | `assistant-hint` | "Point at something and ask a question." | |

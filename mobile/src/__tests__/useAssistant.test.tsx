@@ -235,6 +235,19 @@ describe('useAssistant', () => {
     expect(sendTurn.mock.calls[1][1]).toEqual({ audio_base64: expect.any(String), audio_mime: 'audio/wav' });
   });
 
+  it('mute: the mic is ignored until unmuted, and frames keep flowing', async () => {
+    const { result } = await setup();
+    expect(result.current.muted).toBe(false);
+    await act(async () => mic.onSpeechStart());
+    expect(result.current.state.phase).toBe('hearing');
+    await act(async () => result.current.toggleMute()); // mid-sentence
+    expect(result.current.muted).toBe(true);
+    expect(mic.muted).toBe(true);
+    expect(result.current.state.phase).toBe('listening'); // that sentence is dropped
+    await act(async () => result.current.toggleMute());
+    expect(mic.muted).toBe(false);
+  });
+
   it('Read again moves the mic aside before replaying', async () => {
     sendTurn.mockResolvedValue(turn());
     const { result } = await setup();

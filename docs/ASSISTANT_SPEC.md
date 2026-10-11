@@ -113,6 +113,11 @@ camera + frames ──(you stop talking)──▶ thinking (mic ignored) ──�
   (`isMicMuted`), and for 300 ms after it finishes so the tail of its voice isn't taken
   for a question. Talking over Gem does nothing; the answer screen says "Gem is speaking —
   ask your next question when it finishes", then "Listening — ask a follow-up anytime."
+- **Mute button** (top right, also above the answer sheet): while muted nothing the user
+  says is heard, sent or added to Gem's context (`isMicMuted` includes `userMuted`; buffers
+  are ignored). Muting mid-sentence drops that sentence; only speech that **ends while
+  unmuted** becomes a question. Camera frames keep flowing. The status reads "Muted"; while
+  idle only movement wakes Gem. Not remembered across app launches.
 - **The mic stream:** started once when the camera opens. Muting just ignores buffers.
   On **iOS** the stream is stopped while Gem's voice plays (`expo-audio`'s `AudioStream`
   holds a record-only audio session that playback has to replace) and restarted the moment

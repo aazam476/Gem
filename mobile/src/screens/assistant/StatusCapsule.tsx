@@ -20,19 +20,20 @@ const LABEL: Record<AssistantPhase, string> = {
   error: 'Not connected',
 };
 
-export function statusLabel(phase: AssistantPhase, speaking: boolean, paused: boolean): string {
+export function statusLabel(phase: AssistantPhase, speaking: boolean, paused: boolean, muted = false): string {
   if (speaking) return 'Speaking';
+  if (muted && (phase === 'listening' || phase === 'hearing')) return 'Muted';
   if (paused && (phase === 'listening' || phase === 'hearing')) return 'Paused';
   return LABEL[phase];
 }
 
-export function StatusCapsule(props: { phase: AssistantPhase; speaking: boolean; paused: boolean }) {
+export function StatusCapsule(props: { phase: AssistantPhase; speaking: boolean; paused: boolean; muted?: boolean }) {
   const { color } = useTheme();
-  const { phase, speaking, paused } = props;
-  const label = statusLabel(phase, speaking, paused);
+  const { phase, speaking, paused, muted = false } = props;
+  const label = statusLabel(phase, speaking, paused, muted);
   const dotColor =
-    phase === 'error'
-      ? color.danger
+    phase === 'error' || label === 'Muted'
+      ? color.onCameraDanger
       : paused
         ? color.onCameraMuted
         : phase === 'hearing'

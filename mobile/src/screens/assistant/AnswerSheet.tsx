@@ -27,6 +27,7 @@ import { scheduleOnRN } from 'react-native-worklets';
 import { frameAgeLabel, type AssistantAnswer, type AssistantPhase } from '../../logic/assistantState';
 import { DURATION, EASE_OUT, project, rubberband, SHEET_SPRING } from '../../ui/motion';
 import { AppText, Button, Pill, Row } from '../../ui/primitives';
+import { MUTE_BUTTON_SPACE } from './MuteButton';
 import { theme, useTheme } from '../../ui/theme';
 
 // Layout animation builders live at module scope (built once, not per render).
@@ -39,9 +40,10 @@ const FADE_OUT = FadeOut.duration(DURATION.exit).easing(EASE_OUT);
 const DISMISS_FRACTION = 0.25;
 
 /** Gem doesn't listen while it speaks, so the hint says when the user can talk. */
-export function listeningHint(phase: AssistantPhase, speaking: boolean): string {
+export function listeningHint(phase: AssistantPhase, speaking: boolean, muted = false): string {
   if (phase === 'thinking') return 'Thinking…';
   if (speaking) return 'Gem is speaking — ask your next question when it finishes.';
+  if (muted) return 'Muted — tap the microphone to ask a follow-up.';
   if (phase === 'hearing') return 'Hearing you…';
   return 'Listening — ask a follow-up anytime.';
 }
@@ -50,11 +52,13 @@ export function AnswerSheet(props: {
   answer: AssistantAnswer;
   phase: AssistantPhase;
   speaking: boolean;
+  /** The user muted Gem (the mute button stays above the sheet). */
+  muted?: boolean;
   onReplay: () => void;
   onDismiss: () => void;
 }) {
   const { color } = useTheme();
-  const { answer, phase, speaking, onReplay, onDismiss } = props;
+  const { answer, phase, speaking, muted = false, onReplay, onDismiss } = props;
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
   const reduceMotion = useReducedMotion();
@@ -95,7 +99,8 @@ export function AnswerSheet(props: {
         testID="assistant-answer"
         entering={reduceMotion ? FADE_IN : SHEET_IN}
         exiting={reduceMotion ? FADE_OUT : SHEET_OUT}
-        style={[styles.anchor, { maxHeight: height - insets.top - theme.space.sm }]}
+        // Stops below the mute button, which stays usable over the answer.
+        style={[styles.anchor, { maxHeight: height - insets.top - MUTE_BUTTON_SPACE }]}
       >
         <Animated.View style={[styles.sheet, { backgroundColor: color.surface, paddingBottom: insets.bottom + theme.space.md }, sheetStyle]}>
           <GestureDetector gesture={pan}>
@@ -144,9 +149,9 @@ export function AnswerSheet(props: {
           </Animated.ScrollView>
 
           <Row style={styles.hint}>
-            <View style={[styles.hintDot, { backgroundColor: speaking ? color.textMuted : phase === 'hearing' ? color.hearing : color.listening }]} />
+            <View style={[styles.hintDot, { backgroundColor: speaking ? color.textMuted : muted ? color.danger : phase === 'hearing' ? color.hearing : color.listening }]} />
             <AppText variant="small" tone="muted" testID="assistant-answer-listening" style={{ flex: 1 }}>
-              {listeningHint(phase, speaking)}
+              {listeningHint(phase, speaking, muted)}
             </AppText>
           </Row>
 

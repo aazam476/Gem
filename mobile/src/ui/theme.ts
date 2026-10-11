@@ -29,6 +29,8 @@ export interface Palette {
   // Camera chrome (patient app): light text on dark translucent material, both modes.
   onCamera: string;
   onCameraMuted: string;
+  /** Red that reads on the dark camera chrome (mute button, "Muted"). */
+  onCameraDanger: string;
   glassFallback: string;
   glassTint: string;
   glassBorder: string;
@@ -60,6 +62,7 @@ const light: Palette = {
   border: 'rgba(60, 60, 67, 0.22)',
   onCamera: '#FFFFFF',
   onCameraMuted: 'rgba(255, 255, 255, 0.82)',
+  onCameraDanger: '#FF453A',
   glassFallback: 'rgba(20, 20, 24, 0.72)',
   glassTint: 'rgba(20, 20, 24, 0.35)',
   glassBorder: 'rgba(255, 255, 255, 0.14)',
@@ -90,6 +93,7 @@ const dark: Palette = {
   border: 'rgba(120, 120, 128, 0.42)',
   onCamera: '#FFFFFF',
   onCameraMuted: 'rgba(255, 255, 255, 0.82)',
+  onCameraDanger: '#FF453A',
   glassFallback: 'rgba(28, 28, 30, 0.78)',
   glassTint: 'rgba(28, 28, 30, 0.4)',
   glassBorder: 'rgba(255, 255, 255, 0.16)',

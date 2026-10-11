@@ -40,6 +40,8 @@ function controller(state: Partial<AssistantState> = {}, extra: Partial<Assistan
     dismiss: jest.fn(),
     replay: jest.fn(),
     retry: jest.fn(),
+    muted: false,
+    toggleMute: jest.fn(),
     ...extra,
   };
 }
@@ -134,6 +136,33 @@ describe('AssistantScreen contract', () => {
   it('no inactivity banner while active', async () => {
     await renderAssistant();
     expect(screen.queryByTestId('assistant-idle')).toBeNull();
+  });
+
+  it('mute button: white microphone when listening, toggles on press', async () => {
+    const ctl = await renderAssistant();
+    expect(screen.getByTestId('assistant-mute').props.accessibilityLabel).toBe('Mute microphone');
+    expect(screen.getByTestId('assistant-mute-icon-on')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('assistant-mute'));
+    expect(ctl.toggleMute).toHaveBeenCalledTimes(1);
+  });
+
+  it('muted: red slashed microphone, "Muted" status, no "ask a question" hint', async () => {
+    await renderAssistant({}, { muted: true });
+    expect(screen.getByTestId('assistant-mute').props.accessibilityLabel).toBe('Unmute microphone');
+    expect(screen.getByTestId('assistant-mute-icon-off')).toBeTruthy();
+    expect(screen.getByTestId('assistant-status')).toHaveTextContent('Muted');
+    expect(screen.queryByTestId('assistant-hint')).toBeNull();
+  });
+
+  it('muted and idle: only movement wakes Gem', async () => {
+    await renderAssistant({}, { muted: true, activity: 'idle' });
+    expect(screen.getByTestId('assistant-idle')).toHaveTextContent(/Move your phone to wake Gem\./);
+  });
+
+  it('the mute button stays usable over an answer, and the answer says how to ask', async () => {
+    await renderAssistant({ answer }, { muted: true });
+    expect(screen.getByTestId('assistant-mute')).toBeTruthy();
+    expect(screen.getByTestId('assistant-answer-listening')).toHaveTextContent(/Muted — tap the microphone/);
   });
 
   it('has no typed-question box', async () => {

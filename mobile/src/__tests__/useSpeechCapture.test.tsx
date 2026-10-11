@@ -95,6 +95,33 @@ describe('useSpeechCapture', () => {
     expect(o.onUtterance).toHaveBeenCalledTimes(1); // listening again after unmute
   });
 
+  it('muting mid-sentence never sends that sentence, even when the user then stops talking', async () => {
+    const stream = { start: jest.fn(async () => undefined), stop: jest.fn() };
+    let onBuffer: (b: AudioStreamBuffer) => void = () => undefined;
+    mocked.mockImplementation((o: { onBuffer: typeof onBuffer }) => {
+      onBuffer = o.onBuffer;
+      return { stream, isStreaming: true };
+    });
+    let o = opts();
+    const { rerender } = await renderHook(() => useSpeechCapture(o));
+    const start = new Int16Array(48_000 * 1.5);
+    start.set(tone(1000, 0.3), 24_000); // 0.5 s quiet, then talking...
+    await act(async () => buffers(start).forEach((b) => onBuffer(b)));
+    expect(o.onSpeechStart).toHaveBeenCalledTimes(1);
+    o = { ...o, muted: true }; // ...the user taps mute mid-sentence
+    await rerender({});
+    const rest = new Int16Array(48_000 * 2);
+    rest.set(tone(500, 0.3)); // the end of the sentence, then silence (muted)
+    await act(async () => buffers(rest).forEach((b) => onBuffer(b)));
+    o = { ...o, muted: false };
+    await rerender({});
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, UNMUTE_GUARD_MS + 50));
+    });
+    await act(async () => buffers(new Int16Array(48_000 * 2)).forEach((b) => onBuffer(b))); // silence, unmuted
+    expect(o.onUtterance).not.toHaveBeenCalled();
+  });
+
   it('ignores the moment right after Gem stops (speaker tail), then listens', async () => {
     const stream = { start: jest.fn(async () => undefined), stop: jest.fn() };
     let onBuffer: (b: AudioStreamBuffer) => void = () => undefined;

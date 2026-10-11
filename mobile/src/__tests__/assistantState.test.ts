@@ -50,6 +50,18 @@ describe('assistantReducer', () => {
     expect(followUp.answer).toEqual(answer); // answer stays up until the new one arrives
   });
 
+  it('user mute: the mic is ignored; muting mid-sentence drops it; unmuting listens again', () => {
+    const hearing = run({ type: 'SESSION_READY' }, { type: 'SPEECH_START' });
+    expect(hearing.phase).toBe('hearing');
+    const muted = assistantReducer(hearing, { type: 'SET_MUTED', muted: true });
+    expect(muted.userMuted).toBe(true);
+    expect(muted.phase).toBe('listening'); // the half sentence is not a question
+    expect(isMicMuted(muted)).toBe(true);
+    expect(shouldStreamFrames(muted)).toBe(true); // the camera keeps going
+    const unmuted = assistantReducer(muted, { type: 'SET_MUTED', muted: false });
+    expect(isMicMuted(unmuted)).toBe(false);
+  });
+
   it('pauses frames while an answer is on screen and resumes after dismiss', () => {
     const shown = run({ type: 'SESSION_READY' }, { type: 'TURN_START' }, { type: 'TURN_ANSWERED', answer });
     expect(shouldStreamFrames(shown)).toBe(false);
