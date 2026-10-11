@@ -114,7 +114,18 @@ camera + frames ──(you stop talking)──▶ thinking (mic ignored) ──�
   (`thinking`). A stall watchdog restarts the stream if no buffers arrive for 4 s.
 - While the answer screen is up, **no frames are added** to Gem's memory, so a follow-up
   refers to what you were looking at. Dismiss resumes 1 fps capture.
-- **Barge-in:** while Gem speaks, the VAD runs in echo mode: it measures Gem's own voice
+- **iOS needs a different mic while Gem speaks.** `expo-audio`'s `AudioStream` sets the
+  audio session to `.record` and has no handler for session changes, so the moment Gem's
+  audio plays (which needs play-and-record) the stream's engine stops — interrupting was
+  impossible and the mic only came back via the 4 s stall watchdog after Gem finished.
+  Now, on iOS, while Gem speaks the stream is paused and the **file recorder**
+  (`useAudioRecorder`, play-and-record, 16 kHz WAV, level metering every 50 ms) listens;
+  `logic/bargeIn.ts` learns Gem's echo level for 0.4 s and fires when the input is ≥ 8 dB
+  louder (and ≥ -40 dBFS) for 400 ms. Then Gem stops, the recording from 300 ms before the
+  user started is decoded and seeds the VAD (`beginUtterance`), and the stream resumes to
+  capture the rest of the sentence. When Gem finishes without interruption, the stream is
+  restarted immediately. Android keeps the stream running and uses the echo-mode VAD below.
+- **Barge-in (Android):** while Gem speaks, the VAD runs in echo mode: it measures Gem's own voice
   through the mic for 0.4 s, then only **voiced** speech ≥ 10 dB louder than that echo for
   **450 ms** counts (a cough, "oh!", or a door won't cut Gem off).
   On speech start Gem stops talking immediately; the utterance is sent with
