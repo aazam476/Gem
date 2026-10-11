@@ -71,6 +71,12 @@ class Settings:
     frame_long_edge: int = 768
     max_history_turns: int = 20
     max_audio_bytes: int = 4_000_000
+
+    # Researcher study documents (notes, images, PDFs) given to Gem as context.
+    uploads_dir: str = str(BACKEND_DIR / "uploads")
+    max_document_bytes: int = 20_000_000
+    max_documents_per_protocol: int = 20
+    max_document_total_bytes: int = 50_000_000
     cors_origins: list[str] = field(
         default_factory=lambda: ["http://localhost:8081", "http://localhost:19006"]
     )
@@ -110,6 +116,7 @@ def load_settings(**overrides: object) -> Settings:
             "GEM_CORS_ORIGINS", ["http://localhost:8081", "http://localhost:19006"]
         ),
         gateway_token=os.getenv("GEM_GATEWAY_TOKEN", ""),
+        uploads_dir=os.getenv("GEM_UPLOADS_DIR", str(BACKEND_DIR / "uploads")),
     )
     values.update(overrides)
     return Settings(**values)  # type: ignore[arg-type]

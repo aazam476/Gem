@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 
 import pytest
 
@@ -80,3 +81,34 @@ def test_assistant_recalls_an_earlier_frame() -> None:
         Prompt(build_system_prompt(None), [], frames, None, None, "Where was the blood pressure monitor?")))
     print(reply)
     assert reply.frame_id == 1 and reply.annotations
+
+
+def test_assistant_answers_from_a_study_pdf(tmp_path) -> None:
+    """Upload a one-page 'manual' PDF to Gemini Files and ask about it."""
+    import io
+
+    from PIL import Image, ImageDraw
+
+    from app.assistant.brain import GeminiBrain, Prompt, build_system_prompt
+    from app.assistant.documents import DocumentLibrary, GeminiFiles
+    from app.rules import blood_pressure_preset
+    from app.store import Store
+
+    settings = load_settings(database_path=str(tmp_path / "live.db"), uploads_dir=str(tmp_path / "up"))
+    assert settings.gemini_api_key, "GEMINI_API_KEY missing"
+    page = Image.new("RGB", (1240, 1754), "white")
+    ImageDraw.Draw(page).text((100, 200), "GEM TEST DEVICE MANUAL\n\nBefore measuring, sit quietly for 7 minutes.",
+                              fill="black", font_size=48)
+    buf = io.BytesIO()
+    page.save(buf, format="PDF")
+    store = Store(settings.database_path)
+    pid = store.create_protocol("Live", "Test study", blood_pressure_preset(), True).protocol_id
+    library = DocumentLibrary(settings, store, GeminiFiles(settings, store))
+    library.add_file(pid, "Device manual", "application/pdf", base64.b64encode(buf.getvalue()).decode())
+    docs = asyncio.run(library.for_prompt(pid))
+    assert docs[0].file_uri, "upload to the Gemini Files API failed"
+    reply = asyncio.run(GeminiBrain(settings).reply(Prompt(
+        build_system_prompt(None), [], [], None, None,
+        "How long should I sit before measuring, according to the manual?", documents=docs)))
+    print(reply)
+    assert "7" in reply.answer or "seven" in reply.answer.lower()

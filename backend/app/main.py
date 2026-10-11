@@ -24,6 +24,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from .assistant.brain import Brain, make_brain
+from .assistant.documents import DocumentLibrary, GeminiFiles, build_documents_router
 from .assistant.routes import build_router, sweep_forever
 from .assistant.sessions import SessionStore
 from .config import Settings, load_settings
@@ -89,6 +90,7 @@ def create_app(
     voice: ElevenLabsVoice | None = None,
     brain: Brain | None = None,
     session_store: SessionStore | None = None,
+    gemini_files: GeminiFiles | None = None,
 ) -> FastAPI:
     settings = settings or load_settings()
     store = Store(settings.database_path)
@@ -108,11 +110,16 @@ def create_app(
     )
     brain_client = brain or make_brain(settings)
 
-    def study_context() -> str | None:
-        # Until researcher uploads exist (TASKS phase 9), the active protocol's
-        # instructions are the study context Gem receives.
+    library = DocumentLibrary(settings, store, gemini_files or GeminiFiles(settings, store))
+
+    def study_context() -> tuple[str | None, str | None]:
+        """(protocol id, protocol text) of the protocol active when a Gem session starts.
+        Its title + instructions go into the system prompt; its documents are read with
+        every question (DocumentLibrary.for_prompt)."""
         active = store.active_protocol()
-        return f"{active.title}: {active.prompt_text}" if active else None
+        if active is None:
+            return None, None
+        return active.protocol_id, f"{active.title}: {active.prompt_text}"
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
@@ -372,7 +379,9 @@ def create_app(
         return StreamingResponse(stream, media_type="audio/mpeg",
                                  headers={"Cache-Control": "no-store"})
 
-    app.include_router(build_router(settings, sessions, brain_client, voice_client, study_context))
+    app.state.documents = library
+    app.include_router(build_router(settings, sessions, brain_client, voice_client, study_context, library))
+    app.include_router(build_documents_router(store, library))
     return app
 
 

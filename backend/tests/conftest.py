@@ -56,7 +56,8 @@ def fixture_photo_b64() -> str:
 def make_client(tmp_path: Path, *, vision: Any = None, voice: Any = None, **overrides: Any) -> TestClient:
     settings = load_settings(
         database_path=str(tmp_path / "test.db"),
-        **{"mock_ai": True, "gemini_api_key": "", "elevenlabs_api_key": "", **overrides},
+        **{"mock_ai": True, "gemini_api_key": "", "elevenlabs_api_key": "",
+           "uploads_dir": str(tmp_path / "uploads"), **overrides},
     )
     return TestClient(create_app(settings, vision=vision, voice=voice))
 

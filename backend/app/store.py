@@ -66,6 +66,22 @@ CREATE TABLE IF NOT EXISTS gateway_rejections (
     validation_ns   INTEGER NOT NULL,
     timestamp       TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS context_documents (
+    doc_id            TEXT PRIMARY KEY,
+    protocol_id       TEXT NOT NULL REFERENCES protocols(protocol_id),
+    kind              TEXT NOT NULL CHECK (kind IN ('note', 'image', 'pdf')),
+    title             TEXT NOT NULL,
+    mime_type         TEXT NOT NULL,
+    size_bytes        INTEGER NOT NULL,
+    sha256            TEXT NOT NULL,
+    text              TEXT,             -- notes
+    path              TEXT,             -- images / PDFs, relative to the uploads dir
+    gemini_name       TEXT,             -- Gemini Files API handle (expires after ~48 h)
+    gemini_uri        TEXT,
+    gemini_expires_at TEXT,
+    created_at        TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_docs_protocol ON context_documents(protocol_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_events_protocol ON clinical_events(protocol_id, timestamp);
 """
 
@@ -348,6 +364,43 @@ class Store:
             d["errors"] = json.loads(d["errors"])
             out.append(d)
         return out
+
+    # -- researcher context documents ---------------------------------------------
+
+    def add_document(self, doc: dict[str, Any]) -> dict[str, Any]:
+        with self._lock:
+            self._conn.execute(
+                "INSERT INTO context_documents (doc_id, protocol_id, kind, title, mime_type, size_bytes,"
+                " sha256, text, path, created_at) VALUES (:doc_id, :protocol_id, :kind, :title, :mime_type,"
+                " :size_bytes, :sha256, :text, :path, :created_at)",
+                doc,
+            )
+        out = self.get_document(doc["doc_id"])
+        assert out is not None
+        return out
+
+    def get_document(self, doc_id: str) -> dict[str, Any] | None:
+        with self._lock:
+            row = self._conn.execute("SELECT * FROM context_documents WHERE doc_id = ?", (doc_id,)).fetchone()
+        return dict(row) if row else None
+
+    def list_documents(self, protocol_id: str) -> list[dict[str, Any]]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM context_documents WHERE protocol_id = ? ORDER BY created_at", (protocol_id,)
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def delete_document(self, doc_id: str) -> None:
+        with self._lock:
+            self._conn.execute("DELETE FROM context_documents WHERE doc_id = ?", (doc_id,))
+
+    def set_document_gemini_file(self, doc_id: str, name: str | None, uri: str | None, expires_at: str | None) -> None:
+        with self._lock:
+            self._conn.execute(
+                "UPDATE context_documents SET gemini_name = ?, gemini_uri = ?, gemini_expires_at = ? WHERE doc_id = ?",
+                (name, uri, expires_at, doc_id),
+            )
 
     def count_events(self) -> int:
         with self._lock:

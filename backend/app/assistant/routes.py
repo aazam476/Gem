@@ -22,6 +22,7 @@ from ..imaging import ImageError, prepare_image
 from ..schemas import ID_PATTERN
 from ..voice import ElevenLabsVoice, VoiceError
 from .brain import Brain, BrainError, Prompt, PromptFrame, build_system_prompt
+from .documents import DocumentLibrary
 from .echo import is_echo
 from .render import render
 from .sessions import Session, SessionExpired, SessionNotFound, SessionStore, Turn
@@ -53,6 +54,7 @@ class SessionOut(BaseModel):
     frames_received: int
     turns: int
     study_context: bool
+    study_documents: int = Field(description="Researcher documents Gem reads with every question")
 
 
 class FrameIn(BaseModel):
@@ -115,7 +117,8 @@ def build_router(
     store: SessionStore,
     brain: Brain,
     voice: ElevenLabsVoice | None,
-    study_context: Callable[[], str | None],
+    study_context: Callable[[], tuple[str | None, str | None]],
+    library: DocumentLibrary | None = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/sessions", tags=["assistant"])
 
@@ -138,12 +141,15 @@ def build_router(
             frames_received=s.frames_received,
             turns=len(s.turns),
             study_context=bool(s.study_context),
+            study_documents=len(library.store.list_documents(s.study_protocol_id))
+            if library is not None and s.study_protocol_id else 0,
         )
 
     @router.post("", status_code=201, response_model=SessionOut)
     def create_session(body: SessionCreate | None = None) -> SessionOut:
         body = body or SessionCreate()
-        return session_out(store.create(body.patient_id, study_context()))
+        protocol_id, context = study_context()
+        return session_out(store.create(body.patient_id, context, protocol_id))
 
     @router.get("/{session_id}", response_model=SessionOut)
     def get_session(session_id: str) -> Any:
@@ -194,6 +200,7 @@ def build_router(
             store.touch(s)  # a prompt counts as activity
             asked_at = store.now()
             frames = store.memory(s)  # the whole visual memory, oldest first
+            documents = await library.for_prompt(s.study_protocol_id) if library is not None else []
             n_high = settings.high_res_recent_frames
             prompt = Prompt(
                 system_prompt=build_system_prompt(s.study_context),
@@ -206,6 +213,7 @@ def build_router(
                 audio_mime=(body.audio_mime or "audio/wav") if audio is not None else None,
                 text=body.text.strip() if body.text is not None else None,
                 interrupted=body.interrupted,
+                documents=documents,
             )
             started = time.perf_counter()
             try:

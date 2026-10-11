@@ -60,7 +60,7 @@ class ScriptedBrain:
 
 def make(tmp_path, *, brain=None, voice=None, clock=None, **settings: Any) -> TestClient:
     s = load_settings(database_path=str(tmp_path / "a.db"), mock_ai=True, gemini_api_key="",
-                      elevenlabs_api_key="", **settings)
+                      elevenlabs_api_key="", uploads_dir=str(tmp_path / "uploads"), **settings)
     store = SessionStore(idle_timeout_s=s.session_idle_timeout_s, max_frames=s.session_max_frames,
                          memory_s=s.memory_s, dedupe_threshold=s.frame_dedupe_threshold,
                          keepalive_s=s.frame_keepalive_s, clock=clock or FakeClock())

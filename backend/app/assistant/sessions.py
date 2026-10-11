@@ -61,6 +61,7 @@ class Session:
     patient_id: str
     study_context: str | None
     created_at: float
+    study_protocol_id: str | None
     last_activity: float
     frames: deque[Frame]
     history: list[dict[str, str]] = field(default_factory=list)  # [{"role": "user"|"model", "text": ...}]
@@ -120,7 +121,7 @@ class SessionStore:
     def now(self) -> float:
         return self._clock()
 
-    def create(self, patient_id: str, study_context: str | None) -> Session:
+    def create(self, patient_id: str, study_context: str | None, study_protocol_id: str | None = None) -> Session:
         self.sweep()
         now = self.now()
         session = Session(
@@ -128,6 +129,7 @@ class SessionStore:
             patient_id=patient_id,
             study_context=study_context,
             created_at=now,
+            study_protocol_id=study_protocol_id,
             last_activity=now,
             frames=deque(maxlen=self.max_frames),
         )
