@@ -25,11 +25,16 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Gem uses the camera to read the screen of your study device.",
+          "cameraPermission": "Gem looks through your camera to help with what is in front of you.",
           "recordAudioAndroid": false
         }
       ],
-      "expo-audio",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Gem listens for your questions so it can help with what your camera sees."
+        }
+      ],
       "expo-asset"
     ]
   }
