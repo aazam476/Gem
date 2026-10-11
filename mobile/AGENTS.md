@@ -1,3 +1,5 @@
+> **Gem project note:** `../CLAUDE.md` and `../docs/` take precedence over this generic Expo guide. This app deliberately does **not** use Expo Router: `App.tsx` switches on `Platform.OS` (web = researcher portal, native = patient app). See `docs/DECISIONS.md` #19.
+
 This is an Expo/React Native mobile application. Prioritize mobile-first patterns, performance, and cross-platform compatibility.
 
 ## Expo has changed — do not trust your training data
