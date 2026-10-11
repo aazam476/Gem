@@ -69,7 +69,7 @@ export function PortalScreen() {
         </View>
 
         {/* ---------------- Gem assistant ---------------- */}
-        <SectionHeader title="Gem assistant" subtitle="How the patient app behaves and what it knows about the study." />
+        <SectionHeader title="Gem assistant" subtitle="How the patient app behaves." />
 
         <Card testID="portal-settings">
           <AppText variant="body" weight="600">
@@ -99,7 +99,7 @@ export function PortalScreen() {
               width={190}
             />
           </Row>
-          <Row>
+          <Row style={styles.actions}>
             <Button
               testID="portal-settings-save"
               label="Save"
@@ -120,31 +120,54 @@ export function PortalScreen() {
           </Row>
         </Card>
 
+        {/* ---------------- Protocols ---------------- */}
+        <SectionHeader title="Protocols" subtitle="Patients and Gem use the active protocol and its study context." />
+
+        <Card testID="portal-protocols">
+          {portal.protocols.length === 0 ? (
+            <AppText tone="muted" testID="portal-protocols-empty" style={styles.empty}>
+              No protocols yet.
+            </AppText>
+          ) : null}
+          {portal.protocols.map((p, i) => (
+            <View key={p.protocol_id}>
+              {i > 0 ? <Separator /> : null}
+              <View testID={`portal-protocol-${p.protocol_id}`} style={styles.listRow}>
+                <View style={{ flex: 1, gap: 4 }}>
+                  <AppText weight="500">{p.title}</AppText>
+                  <Pill label={p.is_active ? 'Active' : 'Inactive'} icon={p.is_active ? 'radio-button-on' : 'radio-button-off'} tone={p.is_active ? 'success' : 'neutral'} />
+                </View>
+                {p.is_active ? (
+                  <Button
+                    testID={`portal-deactivate-${p.protocol_id}`}
+                    label="Deactivate"
+                    variant="secondary"
+                    compact
+                    onPress={() => portal.deactivate(p.protocol_id)}
+                  />
+                ) : (
+                  <Button
+                    testID={`portal-activate-${p.protocol_id}`}
+                    label="Activate"
+                    variant="secondary"
+                    compact
+                    onPress={() => portal.activate(p.protocol_id)}
+                  />
+                )}
+              </View>
+            </View>
+          ))}
+        </Card>
+
         <Card testID="portal-documents">
           <AppText variant="body" weight="600">
             Study context
           </AppText>
-          <AppText variant="small" tone="muted">
-            Notes, photos and PDFs (manuals, instructions) that Gem reads before answering patients in this study. Gem
-            sessions started while the protocol is active use them.
-          </AppText>
           {portal.documentsProtocol ? (
             <>
-              <Row style={{ marginTop: theme.space.sm }}>
-                <Pill icon="folder-open-outline" label={`For: ${portal.documentsProtocol.title}`} testID="portal-documents-protocol" />
-                {portal.protocols
-                  .filter((p) => p.protocol_id !== portal.documentsProtocol?.protocol_id)
-                  .map((p) => (
-                    <Button
-                      key={p.protocol_id}
-                      testID={`portal-documents-select-${p.protocol_id}`}
-                      label={`Switch to ${p.title}`}
-                      variant="plain"
-                      compact
-                      onPress={() => portal.selectDocumentsProtocol(p.protocol_id)}
-                    />
-                  ))}
-              </Row>
+              <AppText variant="small" tone="muted" testID="portal-documents-protocol">
+                {`For the active protocol, ${portal.documentsProtocol.title}. Gem reads these notes, photos and PDFs (manuals, instructions) before answering patients; new Gem sessions use them.`}
+              </AppText>
               <View style={styles.list}>
                 {portal.documents.length === 0 ? (
                   <AppText tone="muted" testID="portal-documents-empty" style={styles.empty}>
@@ -195,7 +218,7 @@ export function PortalScreen() {
                 multiline
                 placeholder="What the study is about, what data is collected, which device patients use…"
               />
-              <Row>
+              <Row style={styles.actions}>
                 <Button testID="portal-note-add" label="Add note" icon="add" compact onPress={portal.addNote} loading={portal.documentsBusy} />
                 <Button
                   testID="portal-upload-file"
@@ -210,7 +233,8 @@ export function PortalScreen() {
             </>
           ) : (
             <AppText tone="muted" testID="portal-documents-no-protocol" style={styles.empty}>
-              Deploy a protocol first, then add study documents to it.
+              Activate a protocol to add study documents. Gem reads them (notes, photos, PDF manuals) before
+              answering patients.
             </AppText>
           )}
           {portal.documentsError ? (
@@ -218,45 +242,6 @@ export function PortalScreen() {
               {portal.documentsError}
             </AppText>
           ) : null}
-        </Card>
-
-        {/* ---------------- Protocols ---------------- */}
-        <SectionHeader title="Protocols" subtitle="The active protocol decides which study context Gem uses." />
-
-        <Card testID="portal-protocols">
-          {portal.protocols.length === 0 ? (
-            <AppText tone="muted" testID="portal-protocols-empty" style={styles.empty}>
-              No protocols yet.
-            </AppText>
-          ) : null}
-          {portal.protocols.map((p, i) => (
-            <View key={p.protocol_id}>
-              {i > 0 ? <Separator /> : null}
-              <View testID={`portal-protocol-${p.protocol_id}`} style={styles.listRow}>
-                <View style={{ flex: 1, gap: 4 }}>
-                  <AppText weight="500">{p.title}</AppText>
-                  <Pill label={p.is_active ? 'Active' : 'Inactive'} icon={p.is_active ? 'radio-button-on' : 'radio-button-off'} tone={p.is_active ? 'success' : 'neutral'} />
-                </View>
-                {p.is_active ? (
-                  <Button
-                    testID={`portal-deactivate-${p.protocol_id}`}
-                    label="Deactivate"
-                    variant="secondary"
-                    compact
-                    onPress={() => portal.deactivate(p.protocol_id)}
-                  />
-                ) : (
-                  <Button
-                    testID={`portal-activate-${p.protocol_id}`}
-                    label="Activate"
-                    variant="secondary"
-                    compact
-                    onPress={() => portal.activate(p.protocol_id)}
-                  />
-                )}
-              </View>
-            </View>
-          ))}
         </Card>
 
         <Card testID="portal-editor">
@@ -335,7 +320,7 @@ export function PortalScreen() {
               {portal.deployMessage}
             </AppText>
           ) : null}
-          <Button testID="portal-deploy" label="Deploy to patients" onPress={portal.deploy} loading={portal.deploying} />
+          <Button testID="portal-deploy" label="Deploy to patients" onPress={portal.deploy} loading={portal.deploying} style={styles.actions} />
         </Card>
 
         {/* ---------------- Gateway ---------------- */}
@@ -454,6 +439,8 @@ const styles = StyleSheet.create({
   connectionDot: { width: 8, height: 8, borderRadius: 4 },
   fields: { alignItems: 'flex-end', marginTop: theme.space.xs },
   list: { marginVertical: theme.space.xs },
+  /** The closing (blue) action of a card gets room above it. */
+  actions: { marginTop: theme.space.md },
   listRow: { flexDirection: 'row', alignItems: 'center', gap: theme.space.md, paddingVertical: theme.space.sm },
   separator: { height: StyleSheet.hairlineWidth },
   empty: { paddingVertical: theme.space.sm },

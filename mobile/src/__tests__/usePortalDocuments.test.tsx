@@ -103,6 +103,15 @@ describe('usePortal study documents', () => {
   });
 });
 
+it('documents follow the active protocol; none when no protocol is active', async () => {
+  const { protocol } = jest.requireActual('../testing/fixtures');
+  (api.listProtocols as jest.Mock).mockResolvedValue([{ ...protocol, is_active: false }]);
+  const hook = await renderHook(() => usePortal());
+  await waitFor(() => expect(hook.result.current.protocols).toHaveLength(1));
+  expect(hook.result.current.documentsProtocol).toBeNull();
+  (api.listProtocols as jest.Mock).mockResolvedValue([protocol]);
+});
+
 describe('usePortal Gem inactivity settings', () => {
   it('loads the saved timings in minutes', async () => {
     const { result } = await setup();

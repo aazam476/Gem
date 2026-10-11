@@ -46,7 +46,6 @@ function controller(overrides: Partial<PortalController> = {}): PortalController
     documentsError: null,
     setNoteTitle: jest.fn(),
     setNoteText: jest.fn(),
-    selectDocumentsProtocol: jest.fn(),
     addNote: jest.fn(),
     uploadFile: jest.fn(),
     deleteDocument: jest.fn(),
@@ -136,7 +135,7 @@ describe('PortalScreen contract', () => {
     expect(screen.getByTestId('portal-latency')).toHaveTextContent(/p95 3 µs/);
   });
 
-  it('study documents: list, add note, upload, remove, switch protocol', async () => {
+  it('study documents: list, add note, upload, remove', async () => {
     const ctl = await renderWith();
     expect(screen.getByTestId('portal-documents-protocol')).toHaveTextContent(/Home blood pressure/);
     expect(screen.getByTestId('portal-document-d-1')).toHaveTextContent(/About the study/);
@@ -146,13 +145,13 @@ describe('PortalScreen contract', () => {
     await fireEvent.press(screen.getByTestId('portal-note-add'));
     await fireEvent.press(screen.getByTestId('portal-upload-file'));
     await fireEvent.press(screen.getByTestId('portal-document-delete-d-2'));
-    await fireEvent.press(screen.getByTestId('portal-documents-select-p-0'));
     expect(ctl.setNoteTitle).toHaveBeenCalledWith('Device');
     expect(ctl.setNoteText).toHaveBeenCalledWith('Omron M7');
     expect(ctl.addNote).toHaveBeenCalled();
     expect(ctl.uploadFile).toHaveBeenCalled();
     expect(ctl.deleteDocument).toHaveBeenCalledWith('d-2');
-    expect(ctl.selectDocumentsProtocol).toHaveBeenCalledWith('p-0');
+    // Documents always belong to the active protocol: no separate protocol switcher.
+    expect(screen.queryByTestId('portal-documents-select-p-0')).toBeNull();
   });
 
   it('study documents: empty, error, and no-protocol states', async () => {

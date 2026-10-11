@@ -35,7 +35,7 @@ export interface PortalController {
   setPurgeMinutes: (v: string) => void;
   saveSettings: () => void;
 
-  /** Protocol whose study documents are shown (defaults to the active one). */
+  /** The active protocol: study documents always belong to it (null when none is active). */
   documentsProtocol: Protocol | null;
   documents: StudyDocument[];
   noteTitle: string;
@@ -44,7 +44,6 @@ export interface PortalController {
   documentsError: string | null;
   setNoteTitle: (v: string) => void;
   setNoteText: (v: string) => void;
-  selectDocumentsProtocol: (protocolId: string) => void;
   addNote: () => void;
   uploadFile: () => void;
   deleteDocument: (docId: string) => void;
@@ -85,7 +84,6 @@ export function usePortal(): PortalController {
   const [deploying, setDeploying] = useState(false);
   const [deployMessage, setDeployMessage] = useState<string | null>(null);
   const mounted = useRef(true);
-  const [selectedDocsProtocol, setSelectedDocsProtocol] = useState<string | null>(null);
   const [idleMinutes, setIdleMinutes] = useState('');
   const [purgeMinutes, setPurgeMinutes] = useState('');
   const [settingsSaving, setSettingsSaving] = useState(false);
@@ -108,8 +106,7 @@ export function usePortal(): PortalController {
   const [documentsBusy, setDocumentsBusy] = useState(false);
   const [documentsError, setDocumentsError] = useState<string | null>(null);
 
-  const documentsProtocol =
-    protocols.find((p) => p.protocol_id === selectedDocsProtocol) ?? protocols.find((p) => p.is_active) ?? null;
+  const documentsProtocol = protocols.find((p) => p.is_active) ?? null;
   const docsProtocolId = documentsProtocol?.protocol_id ?? null;
 
   const loadDocuments = useCallback((protocolId: string | null) => {
@@ -268,7 +265,6 @@ export function usePortal(): PortalController {
     documentsError,
     setNoteTitle,
     setNoteText,
-    selectDocumentsProtocol: setSelectedDocsProtocol,
     addNote: () => {
       if (!noteTitle.trim() || !noteText.trim()) {
         setDocumentsError('Give the note a title and some text.');
