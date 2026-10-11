@@ -1,4 +1,4 @@
-import { concat, resample, rmsDb, toMonoInt16 } from '../logic/pcm';
+import { concat, resample, rmsDb, toMonoInt16, voicing } from '../logic/pcm';
 import { VoiceActivityDetector, type VadEvent } from '../logic/vad';
 import { bytesToBase64, encodeWav } from '../logic/wav';
 
@@ -65,30 +65,36 @@ describe('VoiceActivityDetector', () => {
     expect(events.map((e) => e.type)).toEqual(['speech_start', 'utterance']);
   });
 
-  it('learns a steady noise that starts mid-session after one forced cut', () => {
-    const vad = new VoiceActivityDetector({ maxUtteranceMs: 3000 });
+  it('ignores loud non-speech: clatter, door slams, rustling', () => {
+    const vad = new VoiceActivityDetector();
     feed(vad, noise(1000, 0.002));
-    const first = feed(vad, noise(3500, 0.03, 5)).map((e) => e.type);
-    expect(first).toEqual(['speech_start', 'utterance']);
-    expect(feed(vad, noise(3000, 0.03, 9))).toEqual([]);
+    const bursts = [];
+    for (let k = 0; k < 6; k++) bursts.push(noise(300, 0.3, k + 2), noise(400, 0.002, k + 20));
+    expect(feed(vad, concat(bursts))).toEqual([]);
   });
 
-  it("barge-in mode ignores Gem's own voice but hears the user talking over it", () => {
+  it('a fan starting mid-session never counts as speech, and speech over it still ends', () => {
     const vad = new VoiceActivityDetector();
-    feed(vad, noise(1000, 0.002)); // calibrate the room
+    feed(vad, noise(1000, 0.002));
+    expect(feed(vad, noise(4000, 0.03, 5))).toEqual([]);
+    const speechOverFan = new Int16Array(16_000 * 3);
+    speechOverFan.set(tone(1000, 0.3, 180));
+    const fan = noise(3000, 0.03, 9);
+    for (let i = 0; i < speechOverFan.length; i++) speechOverFan[i] += fan[i];
+    const events = feed(vad, speechOverFan);
+    expect(events.map((e) => e.type)).toEqual(['speech_start', 'utterance']);
+    expect((events[1] as Extract<VadEvent, { type: 'utterance' }>).forced).toBe(false);
+  });
+
+  it('a short loud voiced sound does not interrupt Gem; sustained speech does', () => {
+    const vad = new VoiceActivityDetector();
+    feed(vad, noise(1000, 0.002));
     vad.setEchoMode(true);
-    const gemVoice = tone(3000, 0.05, 300); // about -29 dBFS of echo from the speaker
-    expect(feed(vad, gemVoice)).toEqual([]);
-    expect(vad.echoLevelDb).toBeGreaterThan(-35);
-    const user = concat([tone(800, 0.4, 180), noise(1300, 0.002)]); // ~ -11 dBFS, much louder
-    const types = feed(vad, user).map((e) => e.type);
+    feed(vad, tone(1000, 0.05, 300)); // Gem's voice through the speaker
+    const blip = concat([tone(300, 0.4, 180), tone(800, 0.05, 300)]); // "oh!" over Gem
+    expect(feed(vad, blip)).toEqual([]);
+    const types = feed(vad, concat([tone(900, 0.4, 180), noise(1300, 0.002)])).map((e) => e.type);
     expect(types[0]).toBe('speech_start');
-  });
-
-  it('without barge-in mode the same echo would count as speech', () => {
-    const vad = new VoiceActivityDetector();
-    feed(vad, noise(1000, 0.002));
-    expect(feed(vad, tone(1500, 0.05, 300)).map((e) => e.type)).toContain('speech_start');
   });
 
   it('forces an utterance out at the maximum length', () => {
@@ -125,6 +131,13 @@ describe('pcm helpers', () => {
     expect(Array.from(toMonoInt16(stereo.buffer, 2))).toEqual([1, 2, 3]);
     const f = new Float32Array([0.5, -1, 1]);
     expect(Array.from(toMonoInt16(f.buffer, 1, 'float32'))).toEqual([16383, -32768, 32767]);
+  });
+
+  it('voicing: periodic speech-like sound vs noise', () => {
+    expect(voicing(tone(30, 0.3, 150))).toBeGreaterThan(0.8);
+    expect(voicing(tone(30, 0.3, 300))).toBeGreaterThan(0.8);
+    expect(voicing(noise(30, 0.3, 4))).toBeLessThan(0.35);
+    expect(voicing(new Int16Array(480))).toBe(0);
   });
 
   it('measures level in dBFS', () => {

@@ -56,3 +56,43 @@ export function concat(chunks: Int16Array[]): Int16Array {
   }
   return out;
 }
+
+/**
+ * How "voiced" a frame is: the strongest normalized autocorrelation at a human pitch
+ * period (80–400 Hz). Voiced speech (vowels) is strongly periodic, ~0.6–0.95; clatter,
+ * clicks, rustling, fans and most background noise are not, ~0–0.3.
+ * Computed at half the sample rate to keep it cheap (~30 frames/s on a phone).
+ */
+export function voicing(samples: Int16Array, sampleRate: number = TARGET_SAMPLE_RATE): number {
+  const half = Math.floor(samples.length / 2);
+  if (half < 64) return 0;
+  const x = new Float32Array(half);
+  let mean = 0;
+  for (let i = 0; i < half; i++) {
+    x[i] = (samples[2 * i] + samples[2 * i + 1]) / 2;
+    mean += x[i];
+  }
+  mean /= half;
+  for (let i = 0; i < half; i++) x[i] -= mean;
+  const rate = sampleRate / 2;
+  const minLag = Math.floor(rate / 400);
+  const maxLag = Math.min(Math.floor(rate / 80), half - 32);
+  let best = 0;
+  for (let lag = minLag; lag <= maxLag; lag++) {
+    let xy = 0;
+    let xx = 0;
+    let yy = 0;
+    for (let i = 0; i + lag < half; i++) {
+      const a = x[i];
+      const b = x[i + lag];
+      xy += a * b;
+      xx += a * a;
+      yy += b * b;
+    }
+    if (xx > 0 && yy > 0) {
+      const r = xy / Math.sqrt(xx * yy);
+      if (r > best) best = r;
+    }
+  }
+  return best;
+}

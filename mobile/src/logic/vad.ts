@@ -1,12 +1,12 @@
 /**
- * Energy-based voice activity detector with an adaptive noise floor.
+ * Voice activity detector: loudness (adaptive noise floor) AND voicing (a human pitch).
  *
- * Feed it 16 kHz mono PCM as it arrives; it emits `speech_start` when the level stays
- * above the noise floor + margin long enough, and `utterance` (with the audio, including
+ * Feed it 16 kHz mono PCM as it arrives; it emits `speech_start` when the sound is both
+ * louder than the noise floor + margin and voiced (periodic at 80–400 Hz) for long enough, and `utterance` (with the audio, including
  * a short pre-roll so the first syllable isn't clipped) once the user has been quiet for
  * `endSilenceMs`. Pure and deterministic, so it is unit-tested with synthetic signals.
  */
-import { TARGET_SAMPLE_RATE, concat, rmsDb } from './pcm';
+import { TARGET_SAMPLE_RATE, concat, rmsDb, voicing } from './pcm';
 
 export interface VadOptions {
   sampleRate: number;
@@ -17,9 +17,12 @@ export interface VadOptions {
   endMarginDb: number;
   /** Never treat anything quieter than this as speech, however quiet the room. */
   minSpeechDb: number;
+  /** A frame counts as voice only if `voicing()` is at least this (0–1). */
+  voicingThreshold: number;
   startHoldMs: number;
   endSilenceMs: number;
   prerollMs: number;
+  /** Utterances with less voiced speech than this are dropped (coughs, clatter, "hm"). */
   minSpeechMs: number;
   maxUtteranceMs: number;
   initialNoiseDb: number;
@@ -37,8 +40,9 @@ export const DEFAULT_VAD: VadOptions = {
   frameMs: 30,
   startMarginDb: 15,
   endMarginDb: 8,
-  minSpeechDb: -50,
-  startHoldMs: 150,
+  minSpeechDb: -45,
+  voicingThreshold: 0.45,
+  startHoldMs: 200,
   endSilenceMs: 1000,
   prerollMs: 300,
   minSpeechMs: 350,
@@ -47,7 +51,7 @@ export const DEFAULT_VAD: VadOptions = {
   calibrationMs: 500,
   echoCalibrationMs: 400,
   bargeInMarginDb: 10,
-  bargeInHoldMs: 250,
+  bargeInHoldMs: 450,
 };
 
 export type VadEvent =
@@ -141,6 +145,9 @@ export class VoiceActivityDetector {
   private processFrame(frame: Int16Array): VadEvent[] | null {
     const o = this.options;
     const db = rmsDb(frame);
+    // Only compute pitch for frames loud enough to matter (saves CPU in quiet rooms).
+    const loudEnough = db > Math.max(this.noiseDb + Math.min(o.startMarginDb, o.endMarginDb), o.minSpeechDb - 6);
+    const voiced = loudEnough && voicing(frame, o.sampleRate) >= o.voicingThreshold;
 
     if (this.calibrationLeftMs > 0) {
       this.calibrationDb.push(db);
@@ -172,7 +179,7 @@ export class VoiceActivityDetector {
       const maxPreroll = Math.ceil(o.prerollMs / o.frameMs) + Math.ceil(startHoldMs / o.frameMs);
       while (this.preroll.length > maxPreroll) this.preroll.shift();
 
-      if (db > startThreshold) {
+      if (db > startThreshold && voiced) {
         this.aboveMs += o.frameMs;
         if (this.aboveMs >= startHoldMs) {
           this.speaking = true;
@@ -184,7 +191,8 @@ export class VoiceActivityDetector {
           return [{ type: 'speech_start' }];
         }
       } else {
-        this.aboveMs = 0;
+        // Leaky: a short unvoiced consonant doesn't reset progress, but noise wins over time.
+        this.aboveMs = Math.max(0, this.aboveMs - o.frameMs);
         if (this.echoMode) {
           // Follow Gem's voice level (rises quickly, falls slowly between words).
           const alpha = db > this.echoDb ? 0.1 : 0.02;
@@ -203,7 +211,7 @@ export class VoiceActivityDetector {
     this.utteranceMs += o.frameMs;
     const continueThreshold = Math.max(this.noiseDb + o.endMarginDb, o.minSpeechDb - 6);
     if (db > continueThreshold) {
-      this.speechMs += o.frameMs;
+      if (voiced) this.speechMs += o.frameMs; // only voiced time counts toward minSpeechMs
       this.silenceMs = 0;
     } else {
       this.silenceMs += o.frameMs;
