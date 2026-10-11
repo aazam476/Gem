@@ -67,11 +67,13 @@ cd mobile && npx expo start          # w = portal in browser; scan QR in Expo Go
 
 | # | Steps | Expected |
 |---|-------|----------|
-| 2b.1 | Put the phone face-up on a table, camera at a still scene, stay quiet for 70 s. | After ~60 s: "Paused — Move your phone or speak to wake Gem"; "Frames sent" stops increasing. |
+| 2b.1 | Put the phone face-up on a table, camera at a still scene, stay quiet for 70 s. | After ~60 s the camera dims: "Paused — Move your phone or speak to wake Gem"; status capsule says "Paused"; backend log shows no more frames. |
 | 2b.2 | Pick the phone up. | Banner disappears within a second; frames resume. |
 | 2b.3 | Leave it paused, then just speak a question. | It wakes and answers. |
 | 2b.4 | Hold the phone still but wave your hand in front of the camera (before 60 s pass). | Stays active (scene change counts). |
 | 2b.5 | Leave it still for 10+ minutes, then pick it up and ask "What did you see before?" | Banner said "Gem is asleep"; after waking, Gem has no memory of earlier frames (new session); backend log shows the old session ended. |
+
+| 2b.6 | In the portal set "Pause camera after" 0.5 min and "Forget conversation after" 2 min, Save. Restart the Gem app, stay still. | Paused after ~30 s; "Gem is asleep" after ~2 min. Set back to 1 / 10 afterwards. |
 
 ## 2c. Study documents (portal + phone)
 
@@ -103,6 +105,14 @@ answers, boxes on target, no invented readings.
 
 Run 2.1, 2.4, 2.5, 2.6c, 2.7, 2.8 and 3.1 again, then `cd mobile && npm test`. Check text
 ≥ 20 px, large buttons, and the answer image shows the markings uncropped.
+
+| # | Steps | Expected |
+|---|-------|----------|
+| 5.1 | Open Gem. | Only the camera, a "Listening" capsule at the top and the hint "Point at something and ask a question." No frame counts, change scores or "Mic on". |
+| 5.2 | Ask a question. | Capsule shows a spinner + "Thinking" and your question in quotes; the answer sheet springs up from the bottom (no bounce past the top). |
+| 5.3 | Drag the photo on the answer sheet down and let go past a third of the screen; repeat with a short fast flick. | Both dismiss and listening resumes. A small drag springs back. Dragging up stretches slightly and springs back. |
+| 5.4 | Settings → Accessibility → Motion → Reduce Motion on, ask again. | The answer sheet fades in/out instead of sliding. |
+| 5.5 | Turn Wi-Fi off. | A white card "I'm having trouble connecting…" with "Try again" at the bottom. |
 
 ## 6. Optional
 

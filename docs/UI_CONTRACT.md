@@ -1,8 +1,8 @@
 # UI Contract — for the styling agent
 
 You may restyle **anything visual**. You may not change behavior. Behavior lives in
-hooks; screens only call a hook and render what it returns. Current barebones
-screenshots: [`screenshots/`](screenshots/).
+hooks; screens only call a hook and render what it returns. Current screenshots:
+[`screenshots/`](screenshots/).
 
 ## Platform constraints (read first)
 
@@ -22,8 +22,9 @@ screenshots: [`screenshots/`](screenshots/).
 ## Where to restyle
 
 1. `mobile/src/ui/theme.ts` — colors, spacing, radii, font sizes, touch target size.
-2. `mobile/src/ui/primitives.tsx` — `Screen`, `AppText`, `Button`, `Card`, `TextField`, `Toggle`, `Row`, `Spinner`.
-3. Screen layout: `src/screens/assistant/AssistantScreen.tsx`, `src/screens/assistant/PermissionScreen.tsx`,
+2. `mobile/src/ui/primitives.tsx` — `Screen`, `AppText`, `Button`, `Card`, `Glass`, `Pill`, `SectionHeader`, `TextField`, `Toggle`, `Row`, `Spinner`.
+   `mobile/src/ui/motion.ts` — curves, durations, springs (use these; don't invent values).
+3. Screen layout: `src/screens/assistant/AssistantScreen.tsx` (+ `StatusCapsule.tsx`, `AnswerSheet.tsx`), `src/screens/assistant/PermissionScreen.tsx`,
    `src/screens/portal/PortalScreen.tsx`.
 
 Primitives must keep forwarding `testID`, `onPress`/`onChangeText`/`onChange`, `disabled`,
@@ -47,6 +48,8 @@ Primitives must keep forwarding `testID`, `onPress`/`onChangeText`/`onChange`, `
 - Keep `accessibilityRole="button"`, `accessibilityLabel`, `accessibilityLiveRegion="polite"`
   on the status area. The box overlay stays hidden from screen readers.
 - One primary action per state. No gestures that require precision (no swipes, long-press).
+  Drag-to-dismiss on the answer sheet is an optional shortcut; the Dismiss button stays.
+- Don't show diagnostics to patients (frame counts, change scores, mic on/off).
 - Audio is the main channel; on-screen text must match what is spoken
   (`assistant-answer-text` shows `answer.answer` verbatim).
 
@@ -72,21 +75,22 @@ Hook: `useAssistant()` →
 Destructure it (the React Compiler lint flags member access on an object that carries a ref).
 
 Always present: `assistant-screen` (root), `assistant-camera` (full-screen `CameraView` with
-`ref={attachCamera}`, `onCameraReady={onCameraReady}`, `facing="back"`), `assistant-status`,
-`assistant-mic`, `assistant-frames`. There is no typed-question input (removed on request).
+`ref={attachCamera}`, `onCameraReady={onCameraReady}`, `facing="back"`), `assistant-status`.
+There is no typed-question input (removed on request). `frames` and `micActive` are not
+rendered (diagnostics).
 
 | Condition | Required testIDs | Data | Actions |
 |-----------|------------------|------|---------|
-| `state.phase` | `assistant-status` text: starting → "Starting…", listening → "Listening…", hearing → "Hearing you…", thinking → "Thinking…", error → "Connection problem"; "Speaking…" whenever `state.speaking` | | |
-| mic | `assistant-mic` | `micActive`, `micError` (shown verbatim; on web it explains to type instead) | |
-| frames | `assistant-frames` | `frames.sent`, `frames.remembered`, `frames.lastChangeScore` (diagnostic; may be visually de-emphasized) | |
-| `state.lastTranscript` | `assistant-heard` | "You said: …" | |
+| `state.phase` | `assistant-status` text (`statusLabel`): starting → "Starting…", listening → "Listening", hearing → "Hearing you", thinking → "Thinking", error → "Not connected"; "Speaking" whenever `state.speaking`; "Paused" while `activity !== 'active'` | | |
+| `micError` | `assistant-mic-error` | "Gem can't hear you" + `micError` verbatim | |
+| `phase === 'thinking'` + `state.lastTranscript` | `assistant-heard` | the question in quotes | |
 | `state.notice` | `assistant-notice` | e.g. "I didn't catch that." | |
+| listening, active, no question asked yet | `assistant-hint` | "Point at something and ask a question." | |
 | `phase === 'thinking'` | `assistant-thinking` | progress indicator | |
 | `activity !== 'active'` (and no answer shown) | `assistant-idle` | "Paused" (idle, 1 min) / "Gem is asleep" (expired, 10 min) + "Move your phone or speak to wake Gem" | none — movement or speech wakes it |
 | `phase === 'error'` | `assistant-error`, `assistant-retry` | `state.error` | `retry` |
 | `state.answer` older frame | `assistant-answer-age` (only when `frameAgeLabel(answer.frameAgeS)` is non-null) | "Seen 58 seconds ago" — the photo is NOT the current view | |
-| `state.answer` | `assistant-answer` (full-screen overlay), `assistant-answer-listening` ("Still listening — you can interrupt or ask a follow-up" / "Hearing you…" / "Thinking…" by `state.phase`), `assistant-answer-image` (only if `imageUri`), `assistant-answer-box` (scrollable text box), `assistant-answer-text`, `assistant-replay`, `assistant-dismiss` | `answer.imageUri` (show with `resizeMode="contain"` — the drawing is baked into the image), `answer.answer` | `replay`, `dismiss` |
+| `state.answer` | `assistant-answer` (answer sheet), `assistant-answer-listening` ("Still listening — ask a follow-up anytime." / "Hearing you…" / "Thinking…" by `state.phase`), `assistant-answer-image` (only if `imageUri`), `assistant-answer-box` (scrollable text box), `assistant-answer-text`, `assistant-replay`, `assistant-dismiss` | `answer.imageUri` (show with `resizeMode="contain"` — the drawing is baked into the image), `answer.answer` | `replay`, `dismiss` |
 
 Constraints specific to this screen:
 - The camera must stay mounted under the answer overlay. Frames are paused while the overlay
@@ -103,6 +107,7 @@ Hook: `usePortal()` → see `PortalController` in `src/hooks/usePortal.ts`.
 | Area | Required testIDs | Data | Actions |
 |------|------------------|------|---------|
 | Header | `portal-screen`, `portal-connection` | `connected`, `health.ai_mode`, `health.gemini_model`, `health.voice_enabled` | — |
+| Gem inactivity | `portal-settings`, `portal-idle-minutes`, `portal-purge-minutes`, `portal-settings-save`, `portal-settings-message` (when set), `portal-settings-error` (when set) | `idleMinutes`, `purgeMinutes`, `settingsSaving`, `settingsMessage`, `settingsError` | `setIdleMinutes`, `setPurgeMinutes`, `saveSettings` (`loading` = `settingsSaving`) |
 | Editor | `portal-editor`, `portal-load-bp-preset`, `portal-title-input`, `portal-prompt-input`, `portal-add-metric`, `portal-cross-field`, `portal-deploy` | `draft` | `loadBloodPressurePreset`, `setTitle`, `setPromptText`, `addMetric`, `setSystolicAboveDiastolic`, `deploy` (`loading` = `deploying`) |
 | Metric row *i* | `portal-metric-{i}`, `portal-metric-{i}-name`, `-label`, `-unit`, `-hard_min`, `-min`, `-max`, `-hard_max`, `-required`, `-remove` | `draft.rules.metrics[i]` | `updateMetric(i, field, value)`, `removeMetric(i)` |
 | Form feedback | `portal-form-errors` (when `formErrors.length`), `portal-deploy-message` (when set) | | |
@@ -125,5 +130,6 @@ npm run typecheck && npm run lint && npm test
 every state above with mocked hooks and check the testIDs and handlers. A failure names
 exactly what to reconnect. Then run the HUMAN_TESTS "UI smoke" section on a phone.
 
-Screenshots of the current barebones UI: `screenshots/gem-listening.png`,
-`screenshots/gem-answer.png` (web preview with a fake camera), `screenshots/portal-*.png`.
+Screenshots (web preview with a fake camera): `screenshots/gem-listening.png` (web shows the
+mic error card), `screenshots/gem-paused.png`, `screenshots/gem-answer.png`,
+`screenshots/gem-answer-earlier.png`, `screenshots/portal.png`.

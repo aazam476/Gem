@@ -7,7 +7,7 @@ things marked**, plus a short answer read aloud.
 
 <p>
 <img src="docs/screenshots/gem-answer.png" width="220" alt="Gem answer with a marked photo">
-<img src="docs/screenshots/portal-results.png" width="520" alt="Researcher portal">
+<img src="docs/screenshots/portal.png" width="520" alt="Researcher portal">
 </p>
 
 | Component | Where |

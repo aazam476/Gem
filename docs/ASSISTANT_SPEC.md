@@ -219,11 +219,15 @@ vanish with the session.
 | Scene change | server `change_score` of each frame | ≥ 0.08 (camera noise is ~0.01) |
 | Interaction / Gem busy | Dismiss, Read again, Try again; thinking or speaking | always |
 
+Both times are set by researchers in the portal ("Gem assistant → Inactivity",
+`PUT /settings/assistant`, defaults 1 and 10 minutes) and reach the app with each new
+session (`idle_after_s`, `purge_after_s`).
+
 - **1 minute** without any signal → `idle`: frames stop (`useFrameStreamer` disabled); the mic
-  and sensors stay on; banner "Paused — Move your phone or speak to wake Gem".
+  and sensors stay on; the camera dims with "Paused — Move your phone or speak to wake Gem".
 - **10 minutes** → `expired`: the app ends the session (`DELETE /sessions/{id}`), purging the
-  context window (frames, history, answers, audio). The server's own 10-minute idle purge
-  remains as a backstop.
+  context window (frames, history, answers, audio). The server's own idle purge (same
+  `purge_after_s`) remains as a backstop.
 - Any signal → `active`: frames resume; after expiry a **new session** opens automatically on
   the next frame or question.
 - Phone lying still on a table: no motion, scene unchanged → idle after 1 min, as intended.

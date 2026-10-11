@@ -132,8 +132,8 @@ so hallucinated strings/booleans are rejected *and audited*.
 ## Gem assistant
 
 The phone app's API. A **session** is Gem's context window: recent frames + conversation
-history + recent answers, in RAM, purged after `idle_timeout_s` (600) without a frame or
-a prompt. Spec: [ASSISTANT_SPEC.md](ASSISTANT_SPEC.md).
+history + recent answers, in RAM, purged after `idle_timeout_s` (default 600, set from the
+portal as `purge_after_s`) without a frame or a prompt. Spec: [ASSISTANT_SPEC.md](ASSISTANT_SPEC.md).
 
 | `error` | HTTP | Meaning |
 |---------|------|---------|
@@ -150,9 +150,12 @@ a prompt. Spec: [ASSISTANT_SPEC.md](ASSISTANT_SPEC.md).
 Body optional: `{"patient_id": "patient-demo-001"}`.
 ```json
 {"session_id": "uuid", "idle_timeout_s": 600, "memory_s": 300, "expires_in_s": 600, "frame_interval_ms": 1000,
- "frames_buffered": 0, "frames_received": 0, "turns": 0, "study_context": true, "study_documents": 2}
+ "frames_buffered": 0, "frames_received": 0, "turns": 0, "study_context": true, "study_documents": 2,
+ "idle_after_s": 60, "purge_after_s": 600}
 ```
 `study_context` is true when a protocol was active at creation (its text is given to Gemini).
+`idle_after_s` / `purge_after_s` are the portal's inactivity timings: the app pauses frames
+after `idle_after_s` without activity and ends the session after `purge_after_s`.
 
 ### `GET /sessions/{id}` → 200 `Session` · `DELETE /sessions/{id}` → 204
 Reading does not extend the idle timeout.
@@ -200,6 +203,16 @@ chunked — iOS's player is unreliable with length-less streams; the app downloa
 and plays it locally). First request synthesizes and caches it (`X-Gem-Audio-Cache: miss`);
 later requests return the cached bytes (`hit`) — ElevenLabs is billed once per answer.
 Concurrent first requests wait for the same synthesis.
+
+## Assistant settings (portal)
+
+Inactivity timings for Gem, stored in SQLite (`app_settings`) and applied to sessions
+created after saving (the server's idle purge uses `purge_after_s` too).
+
+| Method & path | Body | Success | Errors |
+|---------------|------|---------|--------|
+| `GET /settings/assistant` | — | 200 `{"idle_after_s": 60, "purge_after_s": 600}` | — |
+| `PUT /settings/assistant` | `{idle_after_s: 15–3600, purge_after_s: 60–86400}`, `purge_after_s > idle_after_s` | 200 (saved settings) | 422 `validation_error` |
 
 ## Study documents
 
