@@ -116,3 +116,8 @@ jest.mock('expo-sensors', () => {
 jest.mock('expo-document-picker', () => ({
   getDocumentAsync: jest.fn(async () => ({ canceled: true, assets: null })),
 }));
+
+// Reanimated 4 runs worklets natively; in Node, use the libraries' own mocks.
+jest.mock('react-native-worklets', () => require('react-native-worklets/src/mock'));
+require('react-native-reanimated').setUpTests();
+require('react-native-gesture-handler/jestSetup');

@@ -1,30 +1,37 @@
 /**
  * Gem assistant (native). Full-screen camera, always listening. Rendering only: all
  * behavior comes from useAssistant(). Contract: docs/UI_CONTRACT.md §Assistant.
+ *
+ * The camera is the interface; chrome stays minimal (apple-design: restraint). One
+ * status capsule on top; at the bottom, at most one message (error > mic problem >
+ * notice > first-run hint). Diagnostics (frames sent, change scores, "mic on") are not
+ * shown to patients.
  */
 import { CameraView } from 'expo-camera';
-import { Image, ScrollView, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import Animated, { FadeIn, FadeInDown, FadeOut, FadeOutDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useAssistant } from '../../hooks/useAssistant';
-import { frameAgeLabel, type AssistantPhase } from '../../logic/assistantState';
-import { AppText, Button, Row, Spinner } from '../../ui/primitives';
+import { DURATION, EASE_OUT } from '../../ui/motion';
+import { AppText, Button, Glass, Ionicons } from '../../ui/primitives';
 import { theme } from '../../ui/theme';
+import { AnswerSheet } from './AnswerSheet';
+import { StatusCapsule } from './StatusCapsule';
 
-const STATUS: Record<AssistantPhase, string> = {
-  starting: 'Starting…',
-  listening: 'Listening — ask me anything',
-  hearing: 'Hearing you…',
-  thinking: 'Thinking…',
-  error: 'Connection problem',
-};
+// Toast-style messages enter from the bottom and leave the same way (250 / 200 ms).
+const MESSAGE_IN = FadeInDown.duration(DURATION.enter).easing(EASE_OUT);
+const MESSAGE_OUT = FadeOutDown.duration(DURATION.exit).easing(EASE_OUT);
+const FADE_IN = FadeIn.duration(DURATION.enter).easing(EASE_OUT);
+const FADE_OUT = FadeOut.duration(DURATION.exit).easing(EASE_OUT);
 
 export function AssistantScreen() {
-  const { state, attachCamera, onCameraReady, micActive, micError, frames, activity, retry, replay, dismiss } =
-    useAssistant();
+  const { state, attachCamera, onCameraReady, micError, activity, retry, replay, dismiss } = useAssistant();
+  const paused = activity !== 'active';
+  const ready = state.phase === 'listening' || state.phase === 'hearing';
 
   return (
-    <View testID="assistant-screen" style={{ flex: 1, backgroundColor: '#000' }}>
+    <View testID="assistant-screen" style={styles.root}>
       <CameraView
         testID="assistant-camera"
         ref={attachCamera}
@@ -34,98 +41,109 @@ export function AssistantScreen() {
         onCameraReady={onCameraReady}
       />
 
-      <SafeAreaView style={{ flex: 1 }} pointerEvents="box-none">
-        <View style={{ padding: theme.space.md, gap: theme.space.xs }} accessibilityLiveRegion="polite">
-          <View style={{ backgroundColor: theme.color.overlay, borderRadius: theme.radius.md, padding: theme.space.sm }}>
-            <AppText variant="patient" tone="inverse" testID="assistant-status">
-              {state.speaking ? 'Speaking…' : STATUS[state.phase]}
-            </AppText>
-            <AppText variant="small" tone="inverse" testID="assistant-mic">
-              {micError ? `Microphone error: ${micError}` : micActive ? 'Mic on' : 'Mic off'}
-            </AppText>
-            <AppText variant="small" tone="inverse" testID="assistant-frames">
-              {`Frames sent: ${frames.sent} · remembered: ${frames.remembered}${frames.lastChangeScore !== null ? ` · change ${frames.lastChangeScore.toFixed(2)}` : ''}`}
-            </AppText>
-            {state.lastTranscript ? (
-              <AppText variant="body" tone="inverse" testID="assistant-heard">{`You said: “${state.lastTranscript}”`}</AppText>
-            ) : null}
-            {state.notice ? (
-              <AppText variant="body" tone="inverse" testID="assistant-notice">{state.notice}</AppText>
-            ) : null}
-          </View>
-          {activity !== 'active' && !state.answer ? (
-            <View
-              testID="assistant-idle"
-              style={{ backgroundColor: theme.color.overlay, borderRadius: theme.radius.md, padding: theme.space.sm }}
-            >
-              <AppText variant="patient" tone="inverse">
+      {paused && !state.answer ? (
+        <Animated.View testID="assistant-idle" entering={FADE_IN} exiting={FADE_OUT} style={[StyleSheet.absoluteFill, styles.idle]}>
+          <Glass style={styles.idleCard}>
+            <View style={styles.idleContent}>
+              <Ionicons name={activity === 'expired' ? 'moon' : 'pause'} size={34} color={theme.color.onCamera} />
+              <AppText variant="title" tone="inverse" align="center">
                 {activity === 'expired' ? 'Gem is asleep' : 'Paused'}
               </AppText>
-              <AppText variant="body" tone="inverse">
+              <AppText variant="patient" tone="inverseMuted" align="center">
                 Move your phone or speak to wake Gem.
               </AppText>
             </View>
-          ) : null}
-          {state.phase === 'thinking' ? (
-            <View testID="assistant-thinking" style={{ alignItems: 'flex-start' }}>
-              <Spinner />
-            </View>
-          ) : null}
-          {state.phase === 'error' ? (
-            <View testID="assistant-error" style={{ backgroundColor: theme.color.background, borderRadius: theme.radius.md, padding: theme.space.sm }}>
-              <AppText variant="patient" tone="danger">{state.error}</AppText>
-              <Button testID="assistant-retry" label="Try again" onPress={retry} />
-            </View>
+          </Glass>
+        </Animated.View>
+      ) : null}
+
+      <SafeAreaView style={styles.chrome} pointerEvents="box-none">
+        <View style={styles.top} pointerEvents="box-none">
+          <StatusCapsule phase={state.phase} speaking={state.speaking} paused={paused} />
+          {state.phase === 'thinking' && state.lastTranscript ? (
+            <Animated.View entering={FADE_IN} exiting={FADE_OUT}>
+              <Glass style={styles.heard}>
+                <AppText variant="body" tone="inverse" align="center" numberOfLines={3} testID="assistant-heard" style={styles.heardText}>
+                  {`“${state.lastTranscript}”`}
+                </AppText>
+              </Glass>
+            </Animated.View>
           ) : null}
         </View>
 
+        <View style={styles.bottom} pointerEvents="box-none">
+          {state.phase === 'error' ? (
+            <Animated.View key="error" entering={MESSAGE_IN} exiting={MESSAGE_OUT}>
+              <View testID="assistant-error" style={styles.card}>
+                <View style={styles.cardHeader}>
+                  <Ionicons name="cloud-offline" size={24} color={theme.color.danger} />
+                  <AppText variant="patient" weight="600" style={{ flex: 1 }}>
+                    {state.error}
+                  </AppText>
+                </View>
+                <Button testID="assistant-retry" label="Try again" icon="refresh" onPress={retry} />
+              </View>
+            </Animated.View>
+          ) : micError ? (
+            <Animated.View key="mic" entering={MESSAGE_IN} exiting={MESSAGE_OUT}>
+              <View testID="assistant-mic-error" style={styles.card}>
+                <View style={styles.cardHeader}>
+                  <Ionicons name="mic-off" size={24} color={theme.color.danger} />
+                  <View style={{ flex: 1 }}>
+                    <AppText variant="patient" weight="600">
+                      {"Gem can't hear you"}
+                    </AppText>
+                    <AppText variant="small" tone="muted">
+                      {micError}
+                    </AppText>
+                  </View>
+                </View>
+              </View>
+            </Animated.View>
+          ) : state.notice ? (
+            <Animated.View key={`notice-${state.notice}`} entering={MESSAGE_IN} exiting={MESSAGE_OUT}>
+              <Glass style={styles.toast}>
+                <AppText variant="patient" tone="inverse" align="center" testID="assistant-notice" style={styles.toastText}>
+                  {state.notice}
+                </AppText>
+              </Glass>
+            </Animated.View>
+          ) : ready && !paused && !state.lastTranscript && !state.answer ? (
+            <Animated.View key="hint" entering={MESSAGE_IN} exiting={MESSAGE_OUT}>
+              <Glass style={styles.toast}>
+                <AppText variant="patient" tone="inverse" align="center" testID="assistant-hint" style={styles.toastText}>
+                  Point at something and ask a question.
+                </AppText>
+              </Glass>
+            </Animated.View>
+          ) : null}
+        </View>
       </SafeAreaView>
 
       {state.answer ? (
-        <SafeAreaView
-          testID="assistant-answer"
-          style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.92)', padding: theme.space.md }]}
-        >
-          {frameAgeLabel(state.answer.frameAgeS) ? (
-            <AppText variant="patient" tone="inverse" testID="assistant-answer-age">
-              {frameAgeLabel(state.answer.frameAgeS)}
-            </AppText>
-          ) : null}
-          {state.answer.imageUri ? (
-            <Image
-              testID="assistant-answer-image"
-              source={{ uri: state.answer.imageUri }}
-              style={{ flex: 1, width: '100%' }}
-              resizeMode="contain"
-              accessibilityLabel="Your camera view with Gem's markings"
-            />
-          ) : (
-            <View style={{ flex: 1 }} />
-          )}
-          <AppText variant="small" tone="inverse" testID="assistant-answer-listening">
-            {state.phase === 'hearing'
-              ? 'Hearing you…'
-              : state.phase === 'thinking'
-                ? 'Thinking…'
-                : 'Still listening — you can interrupt or ask a follow-up.'}
-          </AppText>
-          <ScrollView
-            testID="assistant-answer-box"
-            style={{ maxHeight: 220, backgroundColor: theme.color.background, borderRadius: theme.radius.md, marginTop: theme.space.sm }}
-            contentContainerStyle={{ padding: theme.space.md }}
-          >
-            <AppText variant="patient" testID="assistant-answer-text">{state.answer.answer}</AppText>
-          </ScrollView>
-          <Row style={{ marginTop: theme.space.sm }}>
-            <View style={{ flex: 1 }}>
-              <Button testID="assistant-replay" label={state.speaking ? 'Speaking…' : 'Read it again'} variant="secondary" onPress={replay} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Button testID="assistant-dismiss" label="Dismiss" onPress={dismiss} />
-            </View>
-          </Row>
-        </SafeAreaView>
+        <AnswerSheet answer={state.answer} phase={state.phase} speaking={state.speaking} onReplay={replay} onDismiss={dismiss} />
       ) : null}
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: '#000' },
+  chrome: { flex: 1, justifyContent: 'space-between' },
+  top: { alignItems: 'center', paddingTop: theme.space.sm, paddingHorizontal: theme.space.md, gap: theme.space.sm },
+  heard: { borderRadius: theme.radius.lg, maxWidth: 420 },
+  heardText: { paddingHorizontal: theme.space.md, paddingVertical: theme.space.sm },
+  bottom: { padding: theme.space.md, gap: theme.space.sm },
+  idle: { backgroundColor: theme.color.scrim, alignItems: 'center', justifyContent: 'center', padding: theme.space.lg },
+  idleCard: { borderRadius: theme.radius.xl, maxWidth: 420, width: '100%' },
+  idleContent: { alignItems: 'center', gap: theme.space.sm, padding: theme.space.lg },
+  card: {
+    backgroundColor: theme.color.surface,
+    borderRadius: theme.radius.lg,
+    padding: theme.space.md,
+    gap: theme.space.md,
+  },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', gap: theme.space.sm },
+  toast: { alignSelf: 'center', borderRadius: theme.radius.lg, maxWidth: 480 },
+  toastText: { paddingHorizontal: theme.space.lg, paddingVertical: theme.space.md },
+});

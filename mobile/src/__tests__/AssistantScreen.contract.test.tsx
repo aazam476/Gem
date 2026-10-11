@@ -72,9 +72,26 @@ describe('AssistantScreen contract', () => {
     expect(screen.getByTestId('assistant-screen')).toBeTruthy();
     expect(screen.getByTestId('assistant-camera')).toBeTruthy();
     expect(screen.getByTestId('assistant-status')).toHaveTextContent(new RegExp(text));
-    expect(screen.getByTestId('assistant-mic')).toHaveTextContent(/Mic on/);
-    expect(screen.getByTestId('assistant-frames')).toHaveTextContent(/Frames sent: 12 · remembered: 7/);
     expect(screen.queryByTestId('assistant-thinking') !== null).toBe(phase === 'thinking');
+  });
+
+  it('shows no diagnostics to patients (frames, change score, mic on/off)', async () => {
+    await renderAssistant();
+    expect(screen.queryByTestId('assistant-frames')).toBeNull();
+    expect(screen.queryByTestId('assistant-mic')).toBeNull();
+    expect(screen.queryByText(/Frames sent|remembered|change 0|Mic on/)).toBeNull();
+  });
+
+  it('first-run hint until the first question', async () => {
+    await renderAssistant();
+    expect(screen.getByTestId('assistant-hint')).toBeTruthy();
+    await renderAssistant({ lastTranscript: 'hello' });
+    expect(screen.queryByTestId('assistant-hint')).toBeNull();
+  });
+
+  it('status says Paused while inactive', async () => {
+    await renderAssistant({}, { activity: 'idle' });
+    expect(screen.getByTestId('assistant-status')).toHaveTextContent('Paused');
   });
 
   it('shows "Speaking" while Gem talks', async () => {
@@ -82,10 +99,12 @@ describe('AssistantScreen contract', () => {
     expect(screen.getByTestId('assistant-status')).toHaveTextContent(/Speaking/);
   });
 
-  it('shows what was heard and transient notices', async () => {
-    await renderAssistant({ lastTranscript: 'hello gem', notice: "I didn't catch that." });
+  it('shows the question while thinking, and transient notices', async () => {
+    await renderAssistant({ phase: 'thinking', lastTranscript: 'hello gem' });
     expect(screen.getByTestId('assistant-heard')).toHaveTextContent(/hello gem/);
-    expect(screen.getByTestId('assistant-notice')).toBeTruthy();
+    await renderAssistant({ lastTranscript: 'hello gem', notice: "I didn't catch that." });
+    expect(screen.queryByTestId('assistant-heard')).toBeNull();
+    expect(screen.getByTestId('assistant-notice')).toHaveTextContent("I didn't catch that.");
   });
 
   it('error state offers retry', async () => {
@@ -97,7 +116,8 @@ describe('AssistantScreen contract', () => {
 
   it('microphone error is visible', async () => {
     await renderAssistant({}, { micError: 'busy', micActive: false });
-    expect(screen.getByTestId('assistant-mic')).toHaveTextContent(/Microphone error: busy/);
+    expect(screen.getByTestId('assistant-mic-error')).toHaveTextContent(/can't hear you/);
+    expect(screen.getByTestId('assistant-mic-error')).toHaveTextContent(/busy/);
   });
 
   it.each([
@@ -126,6 +146,7 @@ describe('AssistantScreen contract', () => {
     expect(screen.getByTestId('assistant-answer-image').props.source).toEqual({ uri: 'http://api/img.jpg' });
     expect(screen.getByTestId('assistant-answer-box')).toBeTruthy();
     expect(screen.getByTestId('assistant-answer-text')).toHaveTextContent('It is the blue button.');
+    expect(screen.getByTestId('assistant-answer')).toHaveTextContent(/where is the start button/);
     expect(screen.getByTestId('assistant-answer-listening')).toHaveTextContent(/Still listening/);
     await fireEvent.press(screen.getByTestId('assistant-replay'));
     await fireEvent.press(screen.getByTestId('assistant-dismiss'));

@@ -25,6 +25,14 @@ function controller(overrides: Partial<PortalController> = {}): PortalController
       },
     ],
     metrics: { validation: { count: 3, p50_us: 2, p95_us: 3, p99_us: 4, max_us: 5, mean_us: 2 }, events_stored: 2 },
+    idleMinutes: '1',
+    purgeMinutes: '10',
+    settingsSaving: false,
+    settingsMessage: null,
+    settingsError: null,
+    setIdleMinutes: jest.fn(),
+    setPurgeMinutes: jest.fn(),
+    saveSettings: jest.fn(),
     documentsProtocol: protocol,
     documents: [
       { doc_id: 'd-1', protocol_id: 'p-1', kind: 'note', title: 'About the study', mime_type: 'text/plain',
@@ -157,6 +165,25 @@ describe('PortalScreen contract', () => {
     await renderWith({ documentsProtocol: null, protocols: [] });
     expect(screen.getByTestId('portal-documents-no-protocol')).toBeTruthy();
     expect(screen.queryByTestId('portal-upload-file')).toBeNull();
+  });
+
+  it('Gem inactivity settings: edit, save, feedback', async () => {
+    const ctl = await renderWith();
+    expect(screen.getByTestId('portal-idle-minutes').props.value).toBe('1');
+    expect(screen.getByTestId('portal-purge-minutes').props.value).toBe('10');
+    await fireEvent.changeText(screen.getByTestId('portal-idle-minutes'), '2');
+    await fireEvent.changeText(screen.getByTestId('portal-purge-minutes'), '15');
+    await fireEvent.press(screen.getByTestId('portal-settings-save'));
+    expect(ctl.setIdleMinutes).toHaveBeenCalledWith('2');
+    expect(ctl.setPurgeMinutes).toHaveBeenCalledWith('15');
+    expect(ctl.saveSettings).toHaveBeenCalled();
+    expect(screen.queryByTestId('portal-settings-message')).toBeNull();
+  });
+
+  it('Gem inactivity settings: saved and error messages', async () => {
+    await renderWith({ settingsMessage: 'Saved.', settingsError: 'Forget must be longer than pause.' });
+    expect(screen.getByTestId('portal-settings-message')).toHaveTextContent('Saved.');
+    expect(screen.getByTestId('portal-settings-error')).toHaveTextContent(/longer than pause/);
   });
 
   it('empty and disconnected states', async () => {
