@@ -43,6 +43,7 @@ Backup plan if venue Wi-Fi fails: `GEM_MOCK_AI=1` + phone hotspot; everything ru
 with on-device voice.
 
 ## Devpost README checklist
+Finished write-up: [DEVPOST.md](DEVPOST.md).
 - Lucera section: copy `docs/PERFORMANCE.md` (Environment limits, Workload, Metric,
   Procedure, Interpretation) — rerun the load test on the demo laptop first.
 - Gemini/ElevenLabs: describe the per-protocol prompt + schema generation and streamed voice.
