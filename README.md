@@ -6,8 +6,14 @@ you stop talking it answers with **a photo of what you're looking at with the re
 things marked**, plus a short answer read aloud.
 
 <p>
-<img src="docs/screenshots/gem-answer.png" width="220" alt="Gem answer with a marked photo">
-<img src="docs/screenshots/portal.png" width="520" alt="Researcher portal">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/gem-answer-dark.png">
+  <img src="docs/screenshots/gem-answer.png" width="220" alt="Gem answer with a marked photo">
+</picture>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/portal-top-dark.png">
+  <img src="docs/screenshots/portal-top.png" width="560" alt="Researcher portal">
+</picture>
 </p>
 
 | Component | Where |
@@ -39,21 +45,24 @@ npx expo start                  # press w → researcher portal; scan QR in Expo
 
 On the phone: allow camera + microphone, point at something, ask a question out loud
 ("What does this screen say?"), and stop talking. Gem shows the marked photo, the answer in
-a text box, and reads it out; **Read it again** replays without another ElevenLabs charge;
-**Dismiss** returns to the camera. While Gem is answering you can talk over it to correct
+a text box, and reads it out; **Read again** replays without another ElevenLabs charge;
+**Dismiss** (or dragging the photo down) returns to the camera. While Gem is answering you can talk over it to correct
 it ("wait, no, the other chair") or ask a follow-up.
 
-Optional: in the portal, deploy a protocol ("Use blood pressure template → Deploy"), then
-use **Gem study context** to add notes, photos and PDF manuals. Gem reads them (and the
-protocol text) for every question in sessions started while that protocol is active.
+Optional: in the portal, create a protocol under **Protocols → New protocol** ("Use blood
+pressure template → Create and activate"), then use **Study context** to add notes, photos
+and PDF manuals. Gem reads them (and the protocol text) for every question in sessions
+started while that protocol is active.
 
 Gem pauses itself: after a minute with no movement, speech or scene change it stops
 sending frames; after ten minutes it ends the session and forgets everything. Pick up the
-phone or speak to wake it.
+phone or speak to wake it. Researchers can change both times under **Settings** at the
+bottom of the portal. The app and the portal follow the system's light or dark mode.
 
 No keys? Leave them empty (or `GEM_MOCK_AI=1`): Gem gives a fixed test answer with a box in
 the middle and the phone uses its built-in voice. The live microphone works in Expo Go on
-a phone, not in the web preview (`http://localhost:8081/?patient`), which offers typing.
+a phone, not in the web preview (`http://localhost:8081/?patient`), which shows the camera
+screen only.
 
 No shared LAN? See HUMAN_TESTS §0 (VPN or tunnels).
 

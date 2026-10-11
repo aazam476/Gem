@@ -138,4 +138,4 @@ exactly what to reconnect. Then run the HUMAN_TESTS "UI smoke" section on a phon
 Screenshots (web preview with a fake camera): `screenshots/gem-listening.png` (web shows the
 mic error card), `screenshots/gem-paused.png`, `screenshots/gem-answer.png`,
 `screenshots/gem-answer-earlier.png`, `screenshots/portal.png`; dark mode:
-`screenshots/gem-answer-dark.png`, `screenshots/portal-dark.png`.
+`screenshots/gem-answer-dark.png`, `screenshots/portal-dark.png`; README crops: `screenshots/portal-top.png`, `screenshots/portal-top-dark.png`.
