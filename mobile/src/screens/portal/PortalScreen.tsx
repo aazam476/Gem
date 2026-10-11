@@ -24,7 +24,7 @@ import {
   Toggle,
   type IconName,
 } from '../../ui/primitives';
-import { theme } from '../../ui/theme';
+import { theme, useTheme } from '../../ui/theme';
 
 const LIMIT_FIELDS: { field: keyof MetricDraft; label: string }[] = [
   { field: 'hard_min', label: 'Reject below' },
@@ -36,10 +36,12 @@ const LIMIT_FIELDS: { field: keyof MetricDraft; label: string }[] = [
 const DOC_ICON: Record<string, IconName> = { note: 'document-text-outline', pdf: 'document-outline', image: 'image-outline' };
 
 function Separator() {
-  return <View style={styles.separator} />;
+  const { color } = useTheme();
+  return <View style={[styles.separator, { backgroundColor: color.separator }]} />;
 }
 
 export function PortalScreen() {
+  const { color } = useTheme();
   const portal = usePortal();
   const { draft } = portal;
 
@@ -47,8 +49,8 @@ export function PortalScreen() {
     <Screen scroll testID="portal-screen">
       <View style={styles.column}>
         <View style={styles.header}>
-          <View style={styles.logo}>
-            <Ionicons name="sparkles" size={22} color={theme.color.onPrimary} />
+          <View style={[styles.logo, { backgroundColor: color.primary }]}>
+            <Ionicons name="sparkles" size={22} color={color.onPrimary} />
           </View>
           <View style={{ flex: 1, minWidth: 220 }}>
             <AppText variant="hero">Gem</AppText>
@@ -56,8 +58,8 @@ export function PortalScreen() {
               Researcher portal
             </AppText>
           </View>
-          <View testID="portal-connection" style={[styles.connection, !portal.connected && styles.connectionDown]}>
-            <View style={[styles.connectionDot, { backgroundColor: portal.connected ? theme.color.success : theme.color.danger }]} />
+          <View testID="portal-connection" style={[styles.connection, { backgroundColor: portal.connected ? color.surface : color.dangerSoft, borderColor: color.separator }]}>
+            <View style={[styles.connectionDot, { backgroundColor: portal.connected ? color.success : color.danger }]} />
             <AppText variant="small" tone={portal.connected ? 'muted' : 'danger'} weight="500">
               {portal.connected
                 ? `Connected · AI: ${portal.health?.ai_mode ?? '…'}${portal.health?.ai_mode === 'gemini' ? ` (${portal.health.gemini_model})` : ''} · Voice: ${portal.health?.voice_enabled ? 'ElevenLabs' : 'on-device'}`
@@ -153,7 +155,7 @@ export function PortalScreen() {
                   <View key={d.doc_id}>
                     {i > 0 ? <Separator /> : null}
                     <View testID={`portal-document-${d.doc_id}`} style={styles.listRow}>
-                      <Ionicons name={DOC_ICON[d.kind] ?? 'document-outline'} size={22} color={theme.color.primary} />
+                      <Ionicons name={DOC_ICON[d.kind] ?? 'document-outline'} size={22} color={color.primaryText} />
                       <View style={{ flex: 1 }}>
                         <AppText weight="500">{d.title}</AppText>
                         <AppText variant="small" tone="muted">
@@ -288,7 +290,7 @@ export function PortalScreen() {
             are stored and flagged for review.
           </AppText>
           {draft.rules.metrics.map((m, i) => (
-            <View key={i} testID={`portal-metric-${i}`} style={styles.metric}>
+            <View key={i} testID={`portal-metric-${i}`} style={[styles.metric, { backgroundColor: color.surfaceMuted }]}>
               <Row>
                 <TextField testID={`portal-metric-${i}-name`} label="Key" value={m.name} width={140}
                   onChangeText={(v) => portal.updateMetric(i, 'name', v)} placeholder="systolic" />
@@ -320,7 +322,7 @@ export function PortalScreen() {
           </Row>
 
           {portal.formErrors.length > 0 ? (
-            <View testID="portal-form-errors" style={styles.errors}>
+            <View testID="portal-form-errors" style={[styles.errors, { backgroundColor: color.dangerSoft }]}>
               {portal.formErrors.map((e, i) => (
                 <AppText key={i} tone="danger" variant="small">
                   • {e}
@@ -393,7 +395,7 @@ export function PortalScreen() {
             <View key={r.rejection_id}>
               {i > 0 ? <Separator /> : null}
               <View testID={`portal-rejection-${r.rejection_id}`} style={styles.listRow}>
-                <Ionicons name="close-circle" size={22} color={theme.color.danger} />
+                <Ionicons name="close-circle" size={22} color={color.danger} />
                 <View style={{ flex: 1 }}>
                   <AppText tone="danger" weight="500">
                     {r.errors.map((e) => e.message).join('; ')}
@@ -436,7 +438,6 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 14,
-    backgroundColor: theme.color.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -444,27 +445,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: theme.space.sm,
-    backgroundColor: theme.color.surface,
     borderRadius: theme.radius.pill,
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.color.separator,
     flexShrink: 1,
   },
-  connectionDown: { backgroundColor: theme.color.dangerSoft },
   connectionDot: { width: 8, height: 8, borderRadius: 4 },
   fields: { alignItems: 'flex-end', marginTop: theme.space.xs },
   list: { marginVertical: theme.space.xs },
   listRow: { flexDirection: 'row', alignItems: 'center', gap: theme.space.md, paddingVertical: theme.space.sm },
-  separator: { height: StyleSheet.hairlineWidth, backgroundColor: theme.color.separator },
+  separator: { height: StyleSheet.hairlineWidth },
   empty: { paddingVertical: theme.space.sm },
   metric: {
-    backgroundColor: theme.color.surfaceMuted,
     borderRadius: theme.radius.md,
     padding: theme.space.md,
     marginVertical: theme.space.sm,
     gap: theme.space.xs,
   },
-  errors: { backgroundColor: theme.color.dangerSoft, borderRadius: theme.radius.sm, padding: theme.space.sm, marginVertical: theme.space.sm },
+  errors: { borderRadius: theme.radius.sm, padding: theme.space.sm, marginVertical: theme.space.sm },
 });

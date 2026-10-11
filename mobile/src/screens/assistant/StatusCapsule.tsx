@@ -10,7 +10,7 @@ import Animated from 'react-native-reanimated';
 import type { AssistantPhase } from '../../logic/assistantState';
 import { CSS_EASE_OUT, DURATION } from '../../ui/motion';
 import { AppText, Glass, Ionicons, Spinner } from '../../ui/primitives';
-import { theme } from '../../ui/theme';
+import { theme, useTheme } from '../../ui/theme';
 
 const LABEL: Record<AssistantPhase, string> = {
   starting: 'Starting…',
@@ -27,16 +27,17 @@ export function statusLabel(phase: AssistantPhase, speaking: boolean, paused: bo
 }
 
 export function StatusCapsule(props: { phase: AssistantPhase; speaking: boolean; paused: boolean }) {
+  const { color } = useTheme();
   const { phase, speaking, paused } = props;
   const label = statusLabel(phase, speaking, paused);
   const dotColor =
     phase === 'error'
-      ? theme.color.danger
+      ? color.danger
       : paused
-        ? theme.color.onCameraMuted
+        ? color.onCameraMuted
         : phase === 'hearing'
-          ? theme.color.hearing
-          : theme.color.listening;
+          ? color.hearing
+          : color.listening;
   return (
     <Glass style={styles.capsule}>
       <View accessible accessibilityRole="text" accessibilityLabel={`Gem: ${label}`} accessibilityLiveRegion="polite" style={styles.row}>
@@ -45,7 +46,7 @@ export function StatusCapsule(props: { phase: AssistantPhase; speaking: boolean;
             <Spinner />
           </View>
         ) : speaking ? (
-          <Ionicons name="volume-high" size={20} color={theme.color.onCamera} style={styles.icon} />
+          <Ionicons name="volume-high" size={20} color={color.onCamera} style={styles.icon} />
         ) : (
           <Animated.View
             style={{

@@ -27,7 +27,7 @@ import { scheduleOnRN } from 'react-native-worklets';
 import { frameAgeLabel, type AssistantAnswer, type AssistantPhase } from '../../logic/assistantState';
 import { DURATION, EASE_OUT, project, rubberband, SHEET_SPRING } from '../../ui/motion';
 import { AppText, Button, Glass, Ionicons, Row } from '../../ui/primitives';
-import { theme } from '../../ui/theme';
+import { theme, useTheme } from '../../ui/theme';
 
 // Layout animation builders live at module scope (built once, not per render).
 const SHEET_IN = SlideInDown.springify(SHEET_SPRING.duration).dampingRatio(SHEET_SPRING.dampingRatio);
@@ -51,6 +51,7 @@ export function AnswerSheet(props: {
   onReplay: () => void;
   onDismiss: () => void;
 }) {
+  const { color } = useTheme();
   const { answer, phase, speaking, onReplay, onDismiss } = props;
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
@@ -85,7 +86,7 @@ export function AnswerSheet(props: {
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
       <Animated.View entering={FADE_IN} exiting={FADE_OUT} style={StyleSheet.absoluteFill} pointerEvents="none">
-        <Animated.View style={[StyleSheet.absoluteFill, styles.backdrop, backdropStyle]} />
+        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: color.scrim }, backdropStyle]} />
       </Animated.View>
 
       <Animated.View
@@ -94,14 +95,15 @@ export function AnswerSheet(props: {
         exiting={reduceMotion ? FADE_OUT : SHEET_OUT}
         style={[styles.anchor, { maxHeight: height - insets.top - theme.space.sm }]}
       >
-        <Animated.View style={[styles.sheet, { paddingBottom: insets.bottom + theme.space.md }, sheetStyle]}>
+        <Animated.View style={[styles.sheet, { backgroundColor: color.surface, paddingBottom: insets.bottom + theme.space.md }, sheetStyle]}>
           <GestureDetector gesture={pan}>
             <View>
-              <View style={styles.grabber} accessible={false} />
+              <View style={[styles.grabber, { backgroundColor: color.border }]} accessible={false} />
               {answer.imageUri ? (
                 <View
                   style={[
                     styles.photo,
+                    { backgroundColor: color.photoBackdrop },
                     { aspectRatio: answer.imageWidth / Math.max(1, answer.imageHeight), maxHeight: height * 0.45 },
                   ]}
                 >
@@ -115,7 +117,7 @@ export function AnswerSheet(props: {
                   {age ? (
                     <Glass style={styles.ageChip}>
                       <Row style={styles.ageRow}>
-                        <Ionicons name="time-outline" size={16} color={theme.color.onCamera} />
+                        <Ionicons name="time-outline" size={16} color={color.onCamera} />
                         <AppText variant="small" tone="inverse" weight="600" testID="assistant-answer-age">
                           {age}
                         </AppText>
@@ -144,7 +146,7 @@ export function AnswerSheet(props: {
           </Animated.ScrollView>
 
           <Row style={styles.hint}>
-            <View style={[styles.hintDot, phase === 'hearing' && styles.hintDotHearing]} />
+            <View style={[styles.hintDot, { backgroundColor: phase === 'hearing' ? color.hearing : color.listening }]} />
             <AppText variant="small" tone="muted" testID="assistant-answer-listening" style={{ flex: 1 }}>
               {listeningHint(phase)}
             </AppText>
@@ -168,11 +170,9 @@ export function AnswerSheet(props: {
 }
 
 const styles = StyleSheet.create({
-  backdrop: { backgroundColor: theme.color.scrim },
   anchor: { position: 'absolute', left: 0, right: 0, bottom: 0 },
   sheet: {
     flexShrink: 1,
-    backgroundColor: theme.color.surface,
     borderTopLeftRadius: theme.radius.xl,
     borderTopRightRadius: theme.radius.xl,
     paddingHorizontal: theme.space.md,
@@ -183,18 +183,16 @@ const styles = StyleSheet.create({
     width: 40,
     height: 5,
     borderRadius: 3,
-    backgroundColor: theme.color.border,
     marginTop: theme.space.sm,
     marginBottom: theme.space.sm,
   },
-  photo: { width: '100%', borderRadius: theme.radius.lg, overflow: 'hidden', backgroundColor: '#000' },
+  photo: { width: '100%', borderRadius: theme.radius.lg, overflow: 'hidden' },
   ageChip: { position: 'absolute', top: theme.space.sm, left: theme.space.sm, borderRadius: theme.radius.pill },
   ageRow: { paddingHorizontal: 12, paddingVertical: 6, gap: 6, flexWrap: 'nowrap' },
   asked: { marginTop: theme.space.xs },
   textBox: { flexGrow: 0, flexShrink: 1, maxHeight: 260 },
   textBoxContent: { paddingVertical: theme.space.xs },
   hint: { gap: theme.space.sm, flexWrap: 'nowrap' },
-  hintDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: theme.color.listening },
-  hintDotHearing: { backgroundColor: theme.color.hearing },
+  hintDot: { width: 8, height: 8, borderRadius: 4 },
   actions: { flexDirection: 'row', gap: theme.space.sm },
 });

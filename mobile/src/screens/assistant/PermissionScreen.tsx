@@ -8,7 +8,7 @@ import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import type { PermissionsController } from '../../hooks/usePermissions';
 import { DURATION, EASE_OUT } from '../../ui/motion';
 import { AppText, Button, Ionicons, Pill, Screen, Spinner, type IconName } from '../../ui/primitives';
-import { theme } from '../../ui/theme';
+import { theme, useTheme } from '../../ui/theme';
 
 const STAGGER_MS = 60;
 const enter = (i: number) => FadeInDown.duration(DURATION.enter).easing(EASE_OUT).delay(i * STAGGER_MS);
@@ -27,11 +27,12 @@ function PermissionRow(props: {
   value: { granted: boolean } | null;
   testID: string;
 }) {
+  const { color } = useTheme();
   const granted = !!props.value?.granted;
   return (
     <View style={styles.row}>
-      <View style={styles.rowIcon}>
-        <Ionicons name={props.icon} size={24} color={theme.color.primary} />
+      <View style={[styles.rowIcon, { backgroundColor: color.secondary }]}>
+        <Ionicons name={props.icon} size={24} color={color.primaryText} />
       </View>
       <View style={{ flex: 1, gap: 2 }}>
         <AppText variant="patient" weight="600" testID={props.testID}>{`${props.name}: ${label(props.value)}`}</AppText>
@@ -49,12 +50,13 @@ function PermissionRow(props: {
 }
 
 export function PermissionScreen({ permissions }: { permissions: PermissionsController }) {
+  const { color } = useTheme();
   const { status, camera, microphone } = permissions;
   if (status === 'checking') {
     return (
       <Screen testID="permission-checking">
         <View style={styles.center}>
-          <Spinner color={theme.color.textMuted} />
+          <Spinner color={color.textMuted} />
           <AppText variant="patient" tone="muted">
             Checking permissions…
           </AppText>
@@ -66,8 +68,8 @@ export function PermissionScreen({ permissions }: { permissions: PermissionsCont
     <Screen testID="permission-screen" scroll>
       <View style={styles.content}>
         <Animated.View entering={ENTER[0]} style={styles.hero}>
-          <View style={styles.logo}>
-            <Ionicons name="sparkles" size={36} color={theme.color.onPrimary} />
+          <View style={[styles.logo, { backgroundColor: color.primary }]}>
+            <Ionicons name="sparkles" size={36} color={color.onPrimary} />
           </View>
           <AppText variant="hero" align="center">
             Gem needs your camera and microphone
@@ -78,7 +80,7 @@ export function PermissionScreen({ permissions }: { permissions: PermissionsCont
           </AppText>
         </Animated.View>
 
-        <Animated.View entering={ENTER[1]} style={styles.group}>
+        <Animated.View entering={ENTER[1]} style={[styles.group, { backgroundColor: color.surface }]}>
           <PermissionRow
             icon="camera"
             name="Camera"
@@ -86,7 +88,7 @@ export function PermissionScreen({ permissions }: { permissions: PermissionsCont
             value={camera}
             testID="permission-camera-status"
           />
-          <View style={styles.separator} />
+          <View style={[styles.separator, { backgroundColor: color.separator }]} />
           <PermissionRow
             icon="mic"
             name="Microphone"
@@ -124,12 +126,10 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: 20,
-    backgroundColor: theme.color.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
   group: {
-    backgroundColor: theme.color.surface,
     borderRadius: theme.radius.lg,
     paddingHorizontal: theme.space.md,
   },
@@ -138,10 +138,9 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 12,
-    backgroundColor: theme.color.secondary,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  separator: { height: StyleSheet.hairlineWidth, backgroundColor: theme.color.separator, marginLeft: 60 },
+  separator: { height: StyleSheet.hairlineWidth, marginLeft: 60 },
   actions: { gap: theme.space.md },
 });

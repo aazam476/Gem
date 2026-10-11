@@ -18,8 +18,9 @@ export default function App() {
   return (
     <GestureHandlerRootView style={styles.root}>
       <SafeAreaProvider>
+        {/* Follows light/dark mode; the camera screen overrides it with its own light bar. */}
+        <StatusBar style="auto" />
         {experience === 'portal' ? <PortalScreen /> : <GemRoot />}
-        <StatusBar style={experience === 'portal' ? 'auto' : 'light'} />
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

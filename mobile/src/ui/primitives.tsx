@@ -23,22 +23,22 @@ import Animated from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CSS_EASE_OUT, DURATION } from './motion';
-import { theme } from './theme';
+import { theme, useTheme, type Palette } from './theme';
 
 export type IconName = ComponentProps<typeof Ionicons>['name'];
 
 type Tone = 'default' | 'muted' | 'success' | 'warning' | 'danger' | 'inverse' | 'inverseMuted' | 'primary';
 
-const toneColor: Record<Tone, string> = {
-  default: theme.color.text,
-  muted: theme.color.textMuted,
-  success: theme.color.success,
-  warning: theme.color.warning,
-  danger: theme.color.danger,
-  inverse: theme.color.onCamera,
-  inverseMuted: theme.color.onCameraMuted,
-  primary: theme.color.primary,
-};
+const toneColor = (c: Palette): Record<Tone, string> => ({
+  default: c.text,
+  muted: c.textMuted,
+  success: c.success,
+  warning: c.warning,
+  danger: c.danger,
+  inverse: c.onCamera,
+  inverseMuted: c.onCameraMuted,
+  primary: c.primaryText,
+});
 
 type Variant = 'body' | 'patient' | 'title' | 'hero' | 'small';
 const weightFor: Record<Variant, TextStyle['fontWeight']> = {
@@ -59,6 +59,7 @@ export function AppText(props: {
   testID?: string;
   style?: StyleProp<TextStyle>;
 }) {
+  const { color } = useTheme();
   const variant = props.variant ?? 'body';
   const [size, lineHeight, letterSpacing] = theme.type[variant];
   return (
@@ -70,7 +71,7 @@ export function AppText(props: {
           fontSize: size,
           lineHeight,
           letterSpacing,
-          color: toneColor[props.tone ?? 'default'],
+          color: toneColor(color)[props.tone ?? 'default'],
           fontWeight: props.weight ?? weightFor[variant],
           textAlign: props.align,
         },
@@ -82,14 +83,15 @@ export function AppText(props: {
   );
 }
 
-const buttonColors = {
-  primary: { bg: theme.color.primary, fg: theme.color.onPrimary },
-  secondary: { bg: theme.color.secondary, fg: theme.color.onSecondary },
-  danger: { bg: theme.color.dangerSoft, fg: theme.color.danger },
-  glass: { bg: 'rgba(255, 255, 255, 0.18)', fg: theme.color.onCamera },
-  light: { bg: theme.color.onCamera, fg: theme.color.text },
-  plain: { bg: 'transparent', fg: theme.color.primary },
-} as const;
+type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'glass' | 'light' | 'plain';
+const buttonColors = (c: Palette): Record<ButtonVariant, { bg: string; fg: string }> => ({
+  primary: { bg: c.primary, fg: c.onPrimary },
+  secondary: { bg: c.secondary, fg: c.onSecondary },
+  danger: { bg: c.dangerSoft, fg: c.danger },
+  glass: { bg: 'rgba(255, 255, 255, 0.18)', fg: c.onCamera },
+  light: { bg: c.onCamera, fg: '#111114' },
+  plain: { bg: 'transparent', fg: c.primaryText },
+});
 
 /**
  * Press feedback: scale 0.97 on press-in in 120 ms, a Reanimated CSS transition
@@ -99,7 +101,7 @@ export function Button(props: {
   label: string;
   onPress: () => void;
   testID: string;
-  variant?: keyof typeof buttonColors;
+  variant?: ButtonVariant;
   icon?: IconName;
   disabled?: boolean;
   loading?: boolean;
@@ -108,7 +110,8 @@ export function Button(props: {
   style?: StyleProp<ViewStyle>;
 }) {
   const [pressed, setPressed] = useState(false);
-  const colors = buttonColors[props.variant ?? 'primary'];
+  const { color } = useTheme();
+  const colors = buttonColors(color)[props.variant ?? 'primary'];
   const disabled = props.disabled || props.loading;
   return (
     <Pressable
@@ -162,8 +165,9 @@ const PRESS_TRANSITION = {
 } as const;
 
 export function Card(props: { children: ReactNode; testID?: string; style?: StyleProp<ViewStyle> }) {
+  const { color } = useTheme();
   return (
-    <View testID={props.testID} style={[styles.card, props.style]}>
+    <View testID={props.testID} style={[styles.card, { backgroundColor: color.surface, borderColor: color.separator }, props.style]}>
       {props.children}
     </View>
   );
@@ -175,8 +179,16 @@ export function Card(props: { children: ReactNode; testID?: string; style?: Styl
  * (no live blur, which is expensive there).
  */
 export function Glass(props: { children: ReactNode; testID?: string; style?: StyleProp<ViewStyle> }) {
+  const { color } = useTheme();
   return (
-    <View testID={props.testID} style={[styles.glass, props.style]}>
+    <View
+      testID={props.testID}
+      style={[
+        styles.glass,
+        { backgroundColor: Platform.OS === 'ios' ? color.glassTint : color.glassFallback, borderColor: color.glassBorder },
+        props.style,
+      ]}
+    >
       {Platform.OS === 'ios' ? <BlurView tint="dark" intensity={45} style={StyleSheet.absoluteFill} /> : null}
       {props.children}
     </View>
@@ -189,11 +201,12 @@ export function Pill(props: {
   icon?: IconName;
   testID?: string;
 }) {
+  const { color } = useTheme();
   const palette = {
-    success: [theme.color.successSoft, theme.color.success],
-    warning: [theme.color.warningSoft, theme.color.warning],
-    danger: [theme.color.dangerSoft, theme.color.danger],
-    neutral: [theme.color.secondary, theme.color.textMuted],
+    success: [color.successSoft, color.success],
+    warning: [color.warningSoft, color.warning],
+    danger: [color.dangerSoft, color.danger],
+    neutral: [color.secondary, color.textMuted],
   }[props.tone ?? 'neutral'];
   return (
     <View testID={props.testID} style={[styles.pill, { backgroundColor: palette[0] }]}>
@@ -223,8 +236,9 @@ export function Screen(props: {
   padded?: boolean;
   background?: string;
 }) {
+  const { color } = useTheme();
   const padding = props.padded === false ? 0 : theme.space.md;
-  const bg = props.background ?? theme.color.background;
+  const bg = props.background ?? color.background;
   return (
     <SafeAreaView testID={props.testID} style={{ flex: 1, backgroundColor: bg }}>
       {props.scroll ? (
@@ -247,6 +261,7 @@ export function TextField(props: {
   width?: number;
   suffix?: string;
 }) {
+  const { color, scheme } = useTheme();
   return (
     <View style={{ marginVertical: theme.space.xs, width: props.width, gap: 6 }}>
       <AppText variant="small" tone="muted" weight="500">
@@ -260,9 +275,14 @@ export function TextField(props: {
           onChangeText={props.onChangeText}
           multiline={props.multiline}
           placeholder={props.placeholder}
-          placeholderTextColor={theme.color.textMuted}
+          placeholderTextColor={color.textMuted}
           keyboardType={props.numeric ? 'decimal-pad' : 'default'}
-          style={[styles.field, props.multiline && { minHeight: 96, textAlignVertical: 'top' }]}
+          keyboardAppearance={scheme}
+          style={[
+            styles.field,
+            { borderColor: color.border, backgroundColor: color.surface, color: color.text },
+            props.multiline && { minHeight: 96, textAlignVertical: 'top' },
+          ]}
         />
         {props.suffix ? (
           <AppText variant="small" tone="muted" style={{ marginLeft: theme.space.sm }}>
@@ -275,6 +295,7 @@ export function TextField(props: {
 }
 
 export function Toggle(props: { label: string; value: boolean; onChange: (v: boolean) => void; testID: string }) {
+  const { color } = useTheme();
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.space.sm, marginVertical: theme.space.xs }}>
       <Switch
@@ -282,7 +303,7 @@ export function Toggle(props: { label: string; value: boolean; onChange: (v: boo
         accessibilityLabel={props.label}
         value={props.value}
         onValueChange={props.onChange}
-        trackColor={{ true: theme.color.success, false: theme.color.secondary }}
+        trackColor={{ true: color.success, false: color.secondary }}
       />
       <AppText variant="small">{props.label}</AppText>
     </View>
@@ -301,7 +322,8 @@ export function Row(props: { children: ReactNode; style?: StyleProp<ViewStyle>; 
 }
 
 export function Spinner(props: { testID?: string; color?: string }) {
-  return <ActivityIndicator testID={props.testID} size="large" color={props.color ?? theme.color.onCamera} />;
+  const { color } = useTheme();
+  return <ActivityIndicator testID={props.testID} size="large" color={props.color ?? color.onCamera} />;
 }
 
 export { Ionicons };
@@ -320,19 +342,15 @@ const styles = StyleSheet.create({
   unpressed: { transform: [{ scale: 1 }] },
   pressed: { transform: [{ scale: 0.97 }] },
   card: {
-    backgroundColor: theme.color.surface,
     borderRadius: theme.radius.lg,
     padding: theme.space.lg,
     marginVertical: theme.space.sm,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.color.separator,
   },
   glass: {
     overflow: 'hidden',
     borderRadius: theme.radius.lg,
-    backgroundColor: Platform.OS === 'ios' ? 'rgba(20, 20, 24, 0.35)' : theme.color.glassFallback,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.color.glassBorder,
   },
   pill: {
     flexDirection: 'row',
@@ -348,13 +366,10 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
     borderWidth: 1,
-    borderColor: theme.color.border,
     borderRadius: theme.radius.sm,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: theme.font.body,
     minHeight: 44,
-    backgroundColor: theme.color.surface,
-    color: theme.color.text,
   },
 });

@@ -8,6 +8,7 @@
  * shown to patients.
  */
 import { CameraView } from 'expo-camera';
+import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown, FadeOut, FadeOutDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -15,7 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAssistant } from '../../hooks/useAssistant';
 import { DURATION, EASE_OUT } from '../../ui/motion';
 import { AppText, Button, Glass, Ionicons } from '../../ui/primitives';
-import { theme } from '../../ui/theme';
+import { theme, useTheme } from '../../ui/theme';
 import { AnswerSheet } from './AnswerSheet';
 import { StatusCapsule } from './StatusCapsule';
 
@@ -26,12 +27,15 @@ const FADE_IN = FadeIn.duration(DURATION.enter).easing(EASE_OUT);
 const FADE_OUT = FadeOut.duration(DURATION.exit).easing(EASE_OUT);
 
 export function AssistantScreen() {
+  const { color } = useTheme();
   const { state, attachCamera, onCameraReady, micError, activity, retry, replay, dismiss } = useAssistant();
   const paused = activity !== 'active';
   const ready = state.phase === 'listening' || state.phase === 'hearing';
 
   return (
     <View testID="assistant-screen" style={styles.root}>
+      {/* Over the camera the status bar is always light, in both modes. */}
+      <StatusBar style="light" />
       <CameraView
         testID="assistant-camera"
         ref={attachCamera}
@@ -42,10 +46,10 @@ export function AssistantScreen() {
       />
 
       {paused && !state.answer ? (
-        <Animated.View testID="assistant-idle" entering={FADE_IN} exiting={FADE_OUT} style={[StyleSheet.absoluteFill, styles.idle]}>
+        <Animated.View testID="assistant-idle" entering={FADE_IN} exiting={FADE_OUT} style={[StyleSheet.absoluteFill, styles.idle, { backgroundColor: color.scrim }]}>
           <Glass style={styles.idleCard}>
             <View style={styles.idleContent}>
-              <Ionicons name={activity === 'expired' ? 'moon' : 'pause'} size={34} color={theme.color.onCamera} />
+              <Ionicons name={activity === 'expired' ? 'moon' : 'pause'} size={34} color={color.onCamera} />
               <AppText variant="title" tone="inverse" align="center">
                 {activity === 'expired' ? 'Gem is asleep' : 'Paused'}
               </AppText>
@@ -74,9 +78,9 @@ export function AssistantScreen() {
         <View style={styles.bottom} pointerEvents="box-none">
           {state.phase === 'error' ? (
             <Animated.View key="error" entering={MESSAGE_IN} exiting={MESSAGE_OUT}>
-              <View testID="assistant-error" style={styles.card}>
+              <View testID="assistant-error" style={[styles.card, { backgroundColor: color.surface }]}>
                 <View style={styles.cardHeader}>
-                  <Ionicons name="cloud-offline" size={24} color={theme.color.danger} />
+                  <Ionicons name="cloud-offline" size={24} color={color.danger} />
                   <AppText variant="patient" weight="600" style={{ flex: 1 }}>
                     {state.error}
                   </AppText>
@@ -86,9 +90,9 @@ export function AssistantScreen() {
             </Animated.View>
           ) : micError ? (
             <Animated.View key="mic" entering={MESSAGE_IN} exiting={MESSAGE_OUT}>
-              <View testID="assistant-mic-error" style={styles.card}>
+              <View testID="assistant-mic-error" style={[styles.card, { backgroundColor: color.surface }]}>
                 <View style={styles.cardHeader}>
-                  <Ionicons name="mic-off" size={24} color={theme.color.danger} />
+                  <Ionicons name="mic-off" size={24} color={color.danger} />
                   <View style={{ flex: 1 }}>
                     <AppText variant="patient" weight="600">
                       {"Gem can't hear you"}
@@ -134,11 +138,10 @@ const styles = StyleSheet.create({
   heard: { borderRadius: theme.radius.lg, maxWidth: 420 },
   heardText: { paddingHorizontal: theme.space.md, paddingVertical: theme.space.sm },
   bottom: { padding: theme.space.md, gap: theme.space.sm },
-  idle: { backgroundColor: theme.color.scrim, alignItems: 'center', justifyContent: 'center', padding: theme.space.lg },
+  idle: { alignItems: 'center', justifyContent: 'center', padding: theme.space.lg },
   idleCard: { borderRadius: theme.radius.xl, maxWidth: 420, width: '100%' },
   idleContent: { alignItems: 'center', gap: theme.space.sm, padding: theme.space.lg },
   card: {
-    backgroundColor: theme.color.surface,
     borderRadius: theme.radius.lg,
     padding: theme.space.md,
     gap: theme.space.md,
