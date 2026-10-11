@@ -3,8 +3,11 @@
  * speaks. (iOS's real-time mic stream can't run during playback, but the file recorder
  * can, and it reports the input level in dBFS a few times per second.)
  *
- * Learns how loud Gem's own voice is in the mic for `calibrationMs`, then triggers when the
- * level stays `marginDb` above that echo for `holdMs` (leaky, so word gaps don't reset it).
+ * Feed it ONLY while Gem's audio is audibly playing (timestamps relative to that moment):
+ * it learns how loud Gem's own voice is in the mic for `calibrationMs`, keeps following
+ * that level as Gem talks, and triggers when the input stays `marginDb` above it for
+ * `holdMs` (leaky, so word gaps don't reset it). While a possible interruption is being
+ * evaluated the echo estimate is frozen, so the user's own voice can't raise the bar.
  */
 
 export interface BargeInOptions {
@@ -16,8 +19,8 @@ export interface BargeInOptions {
 }
 
 export const DEFAULT_BARGE_IN: BargeInOptions = {
-  calibrationMs: 400,
-  marginDb: 8,
+  calibrationMs: 500,
+  marginDb: 10,
   holdMs: 400,
   minDb: -40,
 };
@@ -68,13 +71,14 @@ export class MeterBargeInDetector {
         this.fired = true;
         return { speechStartMs: Math.max(0, this.runStartMs ?? tMs) };
       }
-    } else {
-      this.aboveMs = Math.max(0, this.aboveMs - dt);
-      if (this.aboveMs === 0) this.runStartMs = null;
-      // Follow Gem's voice level: rise quickly, fall slowly.
-      const alpha = db > this.echoDb ? 0.15 : 0.03;
-      this.echoDb += alpha * (db - this.echoDb);
+      return null;
     }
+    this.aboveMs = Math.max(0, this.aboveMs - dt);
+    if (this.aboveMs > 0) return null; // still evaluating a possible interruption: freeze the echo level
+    this.runStartMs = null;
+    // Follow Gem's voice: rise quickly toward louder phrases, fall slowly in pauses.
+    const alpha = db > this.echoDb ? 0.3 : 0.03;
+    this.echoDb += alpha * (db - this.echoDb);
     return null;
   }
 }

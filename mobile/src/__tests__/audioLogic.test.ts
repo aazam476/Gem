@@ -194,6 +194,11 @@ describe('MeterBargeInDetector (iOS recorder levels)', () => {
     expect(run(blips).hit).toBeNull();
   });
 
+  it('absorbs Gem getting louder mid-answer instead of treating it as the user', () => {
+    const gem = [...Array(20).fill(-30), ...Array(60).fill(-24).map((v, i) => v + (i % 3))];
+    expect(run(gem).hit).toBeNull();
+  });
+
   it('fires only once', () => {
     const d = new MeterBargeInDetector();
     const hits = [...Array(10).fill(-40), ...Array(30).fill(-10)].map((v, i) => d.push(v, i * 50)).filter(Boolean);

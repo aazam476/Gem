@@ -187,6 +187,31 @@ describe('useSpeechCapture', () => {
       }
     });
 
+    it('does not mistake Gem starting to talk for the user (regression: echo calibrated on silence)', async () => {
+      jest.useFakeTimers();
+      try {
+        const { recorder } = setupIos();
+        // 1 s of room silence while the answer audio downloads, then Gem's voice at -25 dB.
+        let t = 0;
+        recorder.getStatus.mockImplementation(() => ({ isRecording: true, metering: t++ < 20 ? -48 : -25 + (t % 3) }));
+        let o = opts();
+        const { rerender } = await renderHook(() => useSpeechCapture(o));
+        o = opts({ echo: true, echoAudible: false }); // speaking: downloading, not audible yet
+        await rerender({});
+        await act(async () => {
+          await jest.advanceTimersByTimeAsync(1_000);
+        });
+        o = opts({ echo: true, echoAudible: true }); // Gem's voice starts
+        await rerender({});
+        await act(async () => {
+          await jest.advanceTimersByTimeAsync(4_000);
+        });
+        expect(o.onSpeechStart).not.toHaveBeenCalled();
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
     it('when Gem finishes uninterrupted, the stream restarts immediately', async () => {
       const { stream, recorder } = setupIos();
       recorder.getStatus.mockReturnValue({ isRecording: true, metering: -50 });

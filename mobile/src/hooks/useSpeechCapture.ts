@@ -36,8 +36,11 @@ import { enterListeningAudioMode } from '../services/audioMode';
 export interface SpeechCaptureOptions {
   enabled: boolean;
   muted: boolean;
-  /** Gem is speaking: only the user clearly talking over it counts (barge-in). */
+  /** Gem is speaking (or about to): only the user clearly talking over it counts (barge-in). */
   echo: boolean;
+  /** Gem's voice is actually audible now. iOS barge-in only measures/detects while true, so it
+   * never calibrates "Gem's echo" on the silence before playback starts. Defaults to `echo`. */
+  echoAudible?: boolean;
   onSpeechStart: () => void;
   onUtterance: (audio: Int16Array, sampleRate: number) => void;
   onDiscard: () => void;
@@ -180,6 +183,7 @@ export function useSpeechCapture(options: SpeechCaptureOptions): SpeechCapture {
     let poll: ReturnType<typeof setInterval> | null = null;
     let triggeredAtMs: number | null = null;
     let startedAt = 0;
+    let audibleSince: number | null = null;
     const detector = new MeterBargeInDetector();
 
     void enqueue(async () => {
@@ -198,9 +202,14 @@ export function useSpeechCapture(options: SpeechCaptureOptions): SpeechCapture {
       poll = setInterval(() => {
         const status = recorder.getStatus();
         if (!status.isRecording || status.metering == null) return;
-        const hit = detector.push(status.metering, Date.now() - startedAt);
+        // Only listen for interruptions once Gem is audible; before that there is no echo to learn.
+        if (!(opts.current.echoAudible ?? opts.current.echo)) return;
+        const now = Date.now();
+        if (audibleSince === null) audibleSince = now;
+        const hit = detector.push(status.metering, now - audibleSince);
         if (hit) {
-          triggeredAtMs = hit.speechStartMs;
+          // Convert to recorder time so the right part of the recording seeds the utterance.
+          triggeredAtMs = audibleSince - startedAt + hit.speechStartMs;
           if (poll) clearInterval(poll);
           poll = null;
           log('user interrupted Gem at', hit.speechStartMs, 'ms (echo', detector.echoLevelDb, 'dB)');

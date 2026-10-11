@@ -20,6 +20,8 @@ import { ANSWER_AUDIO_CACHE_SIZE, AUDIO_START_TIMEOUT_MS } from '../config';
 import { enterListeningAudioMode } from './audioMode';
 
 type Listener = (speaking: boolean) => void;
+/** True only while Gem's voice is actually coming out of the speaker (not while downloading). */
+type AudibleListener = (audible: boolean) => void;
 type Sub = { remove: () => void };
 
 const DOWNLOAD_TIMEOUT_MS = 10_000;
@@ -46,6 +48,7 @@ export class AnswerAudio {
   constructor(
     private readonly onSpeaking: Listener,
     private readonly cacheSize: number = ANSWER_AUDIO_CACHE_SIZE,
+    private readonly onAudible: AudibleListener = () => undefined,
   ) {}
 
   /** Number of answers whose audio is held locally (for tests/diagnostics). */
@@ -101,6 +104,7 @@ export class AnswerAudio {
       };
       this.sub = player.addListener('playbackStatusUpdate', (status) => {
         if (gen !== this.generation) return;
+        if (status.playing) this.onAudible(true);
         if (status.playing && !settled) {
           settled = true;
           clearTimeout(timer);
@@ -108,6 +112,7 @@ export class AnswerAudio {
         }
         if (status.didJustFinish) {
           log('finished', turnId);
+          this.onAudible(false);
           this.onSpeaking(false);
         }
       });
@@ -155,6 +160,7 @@ export class AnswerAudio {
       this.current = null;
     }
     void Speech.stop();
+    this.onAudible(false);
     this.onSpeaking(false);
   }
 
@@ -193,7 +199,9 @@ export class AnswerAudio {
       return;
     }
     const set = (speaking: boolean) => () => {
-      if (gen === this.generation) this.onSpeaking(speaking);
+      if (gen !== this.generation) return;
+      this.onAudible(speaking);
+      this.onSpeaking(speaking);
     };
     this.armWatchdog(gen, (estimateSeconds(text) + 5) * 1000);
     Speech.speak(text, {
@@ -212,6 +220,7 @@ export class AnswerAudio {
     this.watchdog = setTimeout(() => {
       if (gen === this.generation) {
         log('watchdog: assuming playback ended');
+        this.onAudible(false);
         this.onSpeaking(false);
       }
     }, ms);

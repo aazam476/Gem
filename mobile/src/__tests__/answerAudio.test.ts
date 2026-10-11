@@ -60,6 +60,30 @@ describe('AnswerAudio', () => {
     expect(Speech.speak).not.toHaveBeenCalled();
   });
 
+  it('reports audible only once the voice is actually playing', async () => {
+    const player = playablePlayer();
+    (createAudioPlayer as jest.Mock).mockReturnValue(player);
+    const audible: boolean[] = [];
+    let resolveDownload!: () => void;
+    (File.downloadFileAsync as jest.Mock).mockImplementationOnce(
+      async (_u: string, target: { exists: boolean; size: number }) => {
+        await new Promise<void>((r) => (resolveDownload = r));
+        target.exists = true;
+        target.size = 24_000;
+        return target;
+      },
+    );
+    const audio = new TrackedAudio(() => undefined, 5, (a) => audible.push(a));
+    const pending = audio.play('t1', '/a', 'x');
+    await new Promise((r) => setTimeout(r, 0));
+    expect(audible.filter(Boolean)).toHaveLength(0); // downloading: not audible yet
+    resolveDownload();
+    await pending;
+    expect(audible[audible.length - 1]).toBe(true);
+    player.finish();
+    expect(audible[audible.length - 1]).toBe(false);
+  });
+
   it('reports speaking immediately so the mic stays off during the download', async () => {
     const speaking: boolean[] = [];
     const audio = new TrackedAudio((s) => speaking.push(s));

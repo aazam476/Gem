@@ -47,6 +47,8 @@ export function useAssistant(): AssistantController {
   const stateRef = useRef(state);
   const camera = useRef<CameraView | null>(null);
   const [cameraReady, setCameraReady] = useState(false);
+  /** Gem's voice is audibly playing (vs. still downloading): barge-in calibrates on this. */
+  const [gemAudible, setGemAudible] = useState(false);
   const [appActive, setAppActive] = useState(AppState.currentState !== 'background');
   const session = useRef<string | null>(null);
   const creating = useRef<Promise<string> | null>(null);
@@ -59,7 +61,11 @@ export function useAssistant(): AssistantController {
   });
 
   if (audio.current === null) {
-    audio.current = new AnswerAudio((speaking) => dispatch({ type: 'SPEAKING', speaking }));
+    audio.current = new AnswerAudio(
+      (speaking) => dispatch({ type: 'SPEAKING', speaking }),
+      undefined,
+      setGemAudible,
+    );
   }
 
   const ensureSession = useCallback(async (): Promise<string> => {
@@ -168,6 +174,7 @@ export function useAssistant(): AssistantController {
     enabled: appActive && state.phase !== 'starting',
     muted: isMicMuted(state),
     echo: state.speaking,
+    echoAudible: gemAudible,
     onSpeechStart: () => {
       // Barge-in: the user started talking over Gem -> stop Gem right away.
       interrupted.current = stateRef.current.speaking;
