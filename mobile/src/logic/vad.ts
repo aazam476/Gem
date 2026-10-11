@@ -117,6 +117,22 @@ export class VoiceActivityDetector {
     return this.echoDb;
   }
 
+  /**
+   * Continue an utterance that was already detected elsewhere (iOS barge-in: the start of
+   * the user's speech was captured by the recorder while Gem was talking). Subsequent
+   * audio is appended until the usual end-of-speech silence.
+   */
+  beginUtterance(seed: Int16Array, voicedMs: number): void {
+    this.reset();
+    this.echoMode = false;
+    this.speaking = true;
+    this.utterance = seed.length ? [seed] : [];
+    this.utteranceMs = Math.round((seed.length / this.options.sampleRate) * 1000);
+    this.speechMs = voicedMs;
+    this.silenceMs = 0;
+    this.calibrationLeftMs = 0;
+  }
+
   /** Drop any partial utterance (e.g. while the assistant itself is talking). Keeps the noise floor. */
   reset(): void {
     this.pending = new Int16Array(0);

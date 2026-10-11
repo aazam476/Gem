@@ -17,7 +17,17 @@ jest.mock('expo-camera', () => {
 
 jest.mock('expo-audio', () => {
   const stream = { start: jest.fn(async () => undefined), stop: jest.fn() };
+  const recorder = {
+    prepareToRecordAsync: jest.fn(async () => undefined),
+    record: jest.fn(),
+    stop: jest.fn(async () => undefined),
+    getStatus: jest.fn(() => ({ isRecording: true, metering: -60 })),
+    uri: 'file://cache/barge.wav',
+  };
   return {
+    IOSOutputFormat: { LINEARPCM: 'lpcm' },
+    AudioQuality: { MAX: 127 },
+    useAudioRecorder: jest.fn(() => recorder),
     createAudioPlayer: jest.fn(() => ({
       play: jest.fn(),
       pause: jest.fn(),
@@ -74,6 +84,8 @@ jest.mock('expo-file-system', () => {
     exists = false;
     size = 0;
     delete = jest.fn();
+    arrayBuffer = jest.fn(async () => (File.nextBytes ?? new Uint8Array(0)).buffer);
+    static nextBytes: Uint8Array | null = null;
     constructor(...parts: unknown[]) {
       this.uri = 'file://' + parts.map((p) => (typeof p === 'string' ? p : (p as { uri: string }).uri)).join('/');
     }

@@ -4,7 +4,6 @@
  * AssistantScreen only renders what this returns.
  */
 import type { CameraView } from 'expo-camera';
-import * as Speech from 'expo-speech';
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 
@@ -157,7 +156,9 @@ export function useAssistant(): AssistantController {
         .catch(() => {
           const message = lineText('network_error');
           dispatch({ type: 'TURN_FAILED', message });
-          Speech.speak(message, { language: 'en-US' });
+          // Through AnswerAudio so the audio session is switched to play-and-record first
+          // (on iOS the idle mic stream holds a record-only session, which would mute speech).
+          void audio.current?.play(`line-${Date.now()}`, null, message);
         });
     },
     [withSession],
