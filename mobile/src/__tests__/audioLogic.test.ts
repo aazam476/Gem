@@ -1,7 +1,7 @@
 import { concat, resample, rmsDb, toMonoInt16, voicing } from '../logic/pcm';
 import { VoiceActivityDetector, type VadEvent } from '../logic/vad';
-import { MeterBargeInDetector } from '../logic/bargeIn';
-import { bytesToBase64, decodeWav, encodeWav } from '../logic/wav';
+import { pickPictureSize } from '../logic/camera';
+import { bytesToBase64, encodeWav } from '../logic/wav';
 
 // Node's Buffer is available in Jest (not in the app); used only as a reference encoder.
 declare const Buffer: { from(b: Uint8Array): { toString(enc: 'base64'): string } };
@@ -87,17 +87,6 @@ describe('VoiceActivityDetector', () => {
     expect((events[1] as Extract<VadEvent, { type: 'utterance' }>).forced).toBe(false);
   });
 
-  it('a short loud voiced sound does not interrupt Gem; sustained speech does', () => {
-    const vad = new VoiceActivityDetector();
-    feed(vad, noise(1000, 0.002));
-    vad.setEchoMode(true);
-    feed(vad, tone(1000, 0.05, 300)); // Gem's voice through the speaker
-    const blip = concat([tone(300, 0.4, 180), tone(800, 0.05, 300)]); // "oh!" over Gem
-    expect(feed(vad, blip)).toEqual([]);
-    const types = feed(vad, concat([tone(900, 0.4, 180), noise(1300, 0.002)])).map((e) => e.type);
-    expect(types[0]).toBe('speech_start');
-  });
-
   it('forces an utterance out at the maximum length', () => {
     const vad = new VoiceActivityDetector({ maxUtteranceMs: 2000 });
     const events = feed(vad, concat([noise(500, 0.002), tone(3000, 0.2)]));
@@ -168,67 +157,18 @@ describe('wav', () => {
   });
 });
 
-describe('MeterBargeInDetector (iOS recorder levels)', () => {
-  function run(levels: number[], stepMs = 50) {
-    const d = new MeterBargeInDetector();
-    for (let i = 0; i < levels.length; i++) {
-      const hit = d.push(levels[i], i * stepMs);
-      if (hit) return { hit, d };
-    }
-    return { hit: null, d };
-  }
-
-  it("does not trigger on Gem's own voice", () => {
-    expect(run(Array(100).fill(-30).map((v, i) => v + (i % 5)))).toMatchObject({ hit: null });
+describe('pickPictureSize (camera capture size)', () => {
+  it('prefers 1080p, then 720p', () => {
+    expect(pickPictureSize(['3840x2160', '1920x1080', '1280x720', 'Photo'])).toBe('1920x1080');
+    expect(pickPictureSize(['3840x2160', '1280x720', 'Photo'])).toBe('1280x720');
   });
 
-  it('triggers when the user is clearly louder for long enough, and reports when they started', () => {
-    const { hit } = run([...Array(20).fill(-32), ...Array(20).fill(-18)]);
-    expect(hit).not.toBeNull();
-    expect(hit!.speechStartMs).toBeGreaterThanOrEqual(900);
-    expect(hit!.speechStartMs).toBeLessThanOrEqual(1000);
+  it('otherwise picks the size closest to 1080p (Android lists device sizes)', () => {
+    expect(pickPictureSize(['4032x3024', '2016x1512', '1600x1200', '640x480'])).toBe('1600x1200');
   });
 
-  it('ignores short loud blips (a cough, a tap)', () => {
-    const blips = Array.from({ length: 60 }, (_, i) => (i % 10 < 3 && i > 10 ? -15 : -32));
-    expect(run(blips).hit).toBeNull();
-  });
-
-  it('absorbs Gem getting louder mid-answer instead of treating it as the user', () => {
-    const gem = [...Array(20).fill(-30), ...Array(60).fill(-24).map((v, i) => v + (i % 3))];
-    expect(run(gem).hit).toBeNull();
-  });
-
-  it('fires only once', () => {
-    const d = new MeterBargeInDetector();
-    const hits = [...Array(10).fill(-40), ...Array(30).fill(-10)].map((v, i) => d.push(v, i * 50)).filter(Boolean);
-    expect(hits).toHaveLength(1);
-  });
-});
-
-describe('decodeWav', () => {
-  it('round-trips encodeWav', () => {
-    const pcm = new Int16Array([0, 1000, -1000, 32767, -32768]);
-    const { samples, sampleRate } = decodeWav(encodeWav(pcm, 16_000));
-    expect(sampleRate).toBe(16_000);
-    expect(Array.from(samples)).toEqual(Array.from(pcm));
-  });
-
-  it('rejects non-WAV data', () => {
-    expect(() => decodeWav(new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]))).toThrow();
-  });
-});
-
-describe('VAD.beginUtterance', () => {
-  it('continues an utterance that started elsewhere and ends on silence', () => {
-    const vad = new VoiceActivityDetector();
-    feed(vad, noise(800, 0.002));
-    const seed = tone(600, 0.3);
-    vad.beginUtterance(seed, 400);
-    const events = feed(vad, concat([tone(400, 0.3), noise(1300, 0.002)]));
-    expect(events.map((e) => e.type)).toEqual(['utterance']);
-    const utt = events[0] as Extract<VadEvent, { type: 'utterance' }>;
-    expect(utt.audio.length).toBeGreaterThan(seed.length);
-    expect(Array.from(utt.audio.slice(0, 50))).toEqual(Array.from(seed.slice(0, 50)));
+  it('keeps the default when nothing suitable exists', () => {
+    expect(pickPictureSize(['Photo', 'High'])).toBeNull();
+    expect(pickPictureSize(['4032x3024', '640x480'])).toBeNull();
   });
 });

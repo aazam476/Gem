@@ -575,7 +575,7 @@ def test_is_echo() -> None:
     assert not is_echo("the yellow chair is on the left", None)
 
 
-def test_interruption_is_flagged_and_correction_sees_previous_boxes(tmp_path) -> None:
+def test_correction_sees_previous_boxes(tmp_path) -> None:
     clock = FakeClock()
     brain = ScriptedBrain(BrainReply("where is the yellow chair", True, "It's this one.",
                                      (Annotation("yellow chair", (100, 100, 400, 300)),)))
@@ -583,12 +583,11 @@ def test_interruption_is_flagged_and_correction_sees_previous_boxes(tmp_path) ->
     sid = new_session(c)
     c.post(f"/sessions/{sid}/frames", json={"image_base64": solid((200, 200, 40))})
     c.post(f"/sessions/{sid}/turns", json={"text": "Where is the yellow chair?"})
-    brain.reply_value = BrainReply("wait no the other chair", True, "Sorry, this one.",
+    brain.reply_value = BrainReply("no the other chair", True, "Sorry, this one.",
                                    (Annotation("yellow chair", (500, 600, 900, 900)),))
-    r = c.post(f"/sessions/{sid}/turns", json={"audio_base64": wav_b64(), "interrupted": True})
+    r = c.post(f"/sessions/{sid}/turns", json={"audio_base64": wav_b64()})
     assert r.status_code == 200 and r.json()["status"] == "answered"
     second = brain.prompts[1]
-    assert second.interrupted is True
     assert "yellow chair at [100, 100, 400, 300]" in second.history[1]["text"]
 
 
@@ -598,16 +597,19 @@ def test_gem_hearing_itself_is_ignored(tmp_path) -> None:
     sid = new_session(c)
     c.post(f"/sessions/{sid}/turns", json={"text": "hi"})
     brain.reply_value = BrainReply("the start button is the round blue one", True, "Yes.", ())
-    body = c.post(f"/sessions/{sid}/turns", json={"audio_base64": wav_b64(), "interrupted": True}).json()
+    body = c.post(f"/sessions/{sid}/turns", json={"audio_base64": wav_b64()}).json()
     assert body["status"] == "ignored" and body["answer"] == ""
     assert len(brain.prompts[1].history) == 2  # echo not added to the conversation
 
 
-def test_gemini_is_told_about_the_interruption() -> None:
+def test_gemini_is_told_how_to_handle_corrections() -> None:
     models = FakeModels(text=reply_json())
-    p = sample_prompt()
-    p = Prompt(p.system_prompt, p.history, p.frames, p.audio, p.audio_mime, p.text, interrupted=True)
-    asyncio.run(gemini_brain(models).reply(p))
-    texts = [part.text or "" for part in models.kwargs["contents"][-1].parts]
-    assert any("interrupted your previous answer" in t for t in texts)
+    asyncio.run(gemini_brain(models).reply(sample_prompt()))
     assert "the other chair" in models.kwargs["config"].system_instruction
+
+
+def test_interrupted_flag_is_no_longer_accepted(tmp_path) -> None:
+    c = make(tmp_path, brain=ScriptedBrain())
+    sid = new_session(c)
+    r = c.post(f"/sessions/{sid}/turns", json={"text": "hi", "interrupted": True})
+    assert r.status_code == 422

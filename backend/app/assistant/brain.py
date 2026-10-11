@@ -52,9 +52,8 @@ nothing needs pointing at (then frame_id is the current view).
 speech is clearly not meant for you (for example a TV or a conversation with someone \
 else), or it is just your own previous answer being played back through the speaker. \
 Then leave "answer" empty.
-7. The user may interrupt you while you are still speaking, usually to correct you \
-("wait, no, the other chair"). Earlier answers in the conversation list exactly what \
-you marked and where ("Marked on frame 12: chair at [ymin, xmin, ymax, xmax]"). When \
+7. The user may correct you in a follow-up ("no, the other chair"). Earlier answers \
+in the conversation list exactly what you marked and where ("Marked on frame 12: chair at [ymin, xmin, ymax, xmax]"). When \
 corrected, pick a DIFFERENT object or frame than the one you marked before, and keep \
 the answer short.
 
@@ -154,7 +153,6 @@ class Prompt:
     audio: bytes | None
     audio_mime: str | None
     text: str | None
-    interrupted: bool = False
     documents: list[Any] = field(default_factory=list)  # list[StudyDocument], read before the frames
 
 
@@ -282,9 +280,6 @@ class GeminiBrain:
         parts: list[Any] = []
         if not prompt.frames:
             parts.append(types.Part.from_text(text="(No camera frames are available right now.)"))
-        if prompt.interrupted:
-            parts.append(types.Part.from_text(
-                text="(The user interrupted your previous answer while you were still speaking.)"))
         if prompt.audio is not None:
             parts.append(types.Part.from_text(text="What the user just said:"))
             parts.append(types.Part.from_bytes(data=prompt.audio, mime_type=prompt.audio_mime or "audio/wav"))

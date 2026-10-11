@@ -34,7 +34,7 @@ describe('assistantReducer', () => {
     expect(s).toMatchObject({ phase: 'listening', answer, lastTranscript: 'what is this' });
   });
 
-  it('mutes the mic only while thinking; Gem speaking can be interrupted', () => {
+  it('mutes the mic while Gem thinks and while it speaks; listens again after', () => {
     const thinking = run({ type: 'SESSION_READY' }, { type: 'TURN_START' });
     expect(isMicMuted(thinking)).toBe(true);
     expect(canSendTurn(thinking)).toBe(false);
@@ -42,11 +42,12 @@ describe('assistantReducer', () => {
       { type: 'SESSION_READY' }, { type: 'TURN_START' }, { type: 'TURN_ANSWERED', answer },
       { type: 'SPEAKING', speaking: true },
     );
-    expect(isMicMuted(speaking)).toBe(false);
-    expect(canSendTurn(speaking)).toBe(true);
-    const interrupting = assistantReducer(speaking, { type: 'SPEECH_START' });
-    expect(interrupting.phase).toBe('hearing');
-    expect(interrupting.answer).toEqual(answer); // answer stays up until the new one arrives
+    expect(isMicMuted(speaking)).toBe(true); // no interrupting: Gem's voice isn't a question
+    const done = assistantReducer(speaking, { type: 'SPEAKING', speaking: false });
+    expect(isMicMuted(done)).toBe(false);
+    const followUp = assistantReducer(done, { type: 'SPEECH_START' });
+    expect(followUp.phase).toBe('hearing');
+    expect(followUp.answer).toEqual(answer); // answer stays up until the new one arrives
   });
 
   it('pauses frames while an answer is on screen and resumes after dismiss', () => {

@@ -32,6 +32,7 @@ function controller(state: Partial<AssistantState> = {}, extra: Partial<Assistan
     attachCamera: jest.fn(),
     onCameraReady: jest.fn(),
     cameraReady: true,
+    pictureSize: '1920x1080',
     micActive: true,
     micError: null,
     frames: { sent: 12, failed: 0, lastChangeScore: 0.08, remembered: 7 },
@@ -147,16 +148,23 @@ describe('AssistantScreen contract', () => {
     expect(screen.getByTestId('assistant-answer-box')).toBeTruthy();
     expect(screen.getByTestId('assistant-answer-text')).toHaveTextContent('It is the blue button.');
     expect(screen.getByTestId('assistant-answer')).toHaveTextContent(/where is the start button/);
-    expect(screen.getByTestId('assistant-answer-listening')).toHaveTextContent(/Still listening/);
+    expect(screen.getByTestId('assistant-answer-listening')).toHaveTextContent(/Listening/);
     await fireEvent.press(screen.getByTestId('assistant-replay'));
     await fireEvent.press(screen.getByTestId('assistant-dismiss'));
     expect(ctl.replay).toHaveBeenCalledTimes(1);
     expect(ctl.dismiss).toHaveBeenCalledTimes(1);
   });
 
-  it('shows that an interruption is being heard over the answer', async () => {
+  it('while Gem speaks the answer says to wait; after, it is listening for a follow-up', async () => {
+    await renderAssistant({ answer, speaking: true });
+    expect(screen.getByTestId('assistant-answer-listening')).toHaveTextContent(/Gem is speaking/);
     await renderAssistant({ answer, phase: 'hearing' });
     expect(screen.getByTestId('assistant-answer-listening')).toHaveTextContent('Hearing you…');
+  });
+
+  it('passes the capture size to the camera', async () => {
+    await renderAssistant();
+    expect(screen.getByTestId('assistant-camera').props.pictureSize).toBe('1920x1080');
   });
 
   it('answer drawn on an earlier frame says when it was seen', async () => {

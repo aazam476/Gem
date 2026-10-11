@@ -45,35 +45,3 @@ export function bytesToBase64(bytes: Uint8Array): string {
   parts.push(chunk);
   return parts.join('');
 }
-
-/** Parse a 16-bit PCM WAV (as written by iOS's recorder) into mono samples. */
-export function decodeWav(bytes: Uint8Array): { samples: Int16Array; sampleRate: number } {
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  const tag = (o: number) => String.fromCharCode(bytes[o], bytes[o + 1], bytes[o + 2], bytes[o + 3]);
-  if (bytes.length < 12 || tag(0) !== 'RIFF' || tag(8) !== 'WAVE') throw new Error('not a WAV file');
-  let offset = 12;
-  let sampleRate = 0;
-  let channels = 1;
-  let bits = 16;
-  while (offset + 8 <= bytes.length) {
-    const id = tag(offset);
-    const size = view.getUint32(offset + 4, true);
-    const body = offset + 8;
-    if (id === 'fmt ') {
-      const format = view.getUint16(body, true);
-      channels = view.getUint16(body + 2, true);
-      sampleRate = view.getUint32(body + 4, true);
-      bits = view.getUint16(body + 14, true);
-      if (format !== 1 && format !== 0xfffe) throw new Error('WAV is not PCM');
-    } else if (id === 'data') {
-      if (bits !== 16) throw new Error(`unsupported WAV bit depth ${bits}`);
-      const end = Math.min(bytes.length, body + size);
-      const frames = Math.floor((end - body) / (2 * channels));
-      const samples = new Int16Array(frames);
-      for (let i = 0; i < frames; i++) samples[i] = view.getInt16(body + i * 2 * channels, true);
-      return { samples, sampleRate };
-    }
-    offset = body + size + (size % 2);
-  }
-  throw new Error('WAV has no data chunk');
-}

@@ -1,9 +1,9 @@
 """Detect when the "question" is really Gem's own answer picked up by the microphone.
 
-While Gem speaks, the mic stays open so the user can interrupt. On-device barge-in
-detection filters most of the echo, but if some gets through, Gemini transcribes Gem's
-own words back. Those turns are ignored deterministically here (and the prompt also tells
-Gemini to set is_request=false for them).
+The app ignores the mic while Gem speaks, but the tail of Gem's voice (or its echo in the
+room) can still reach it right after. If that happens, Gemini transcribes Gem's own words
+back. Those turns are ignored deterministically here (and the prompt also tells Gemini to
+set is_request=false for them).
 """
 
 from __future__ import annotations

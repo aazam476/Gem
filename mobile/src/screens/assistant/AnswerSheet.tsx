@@ -38,10 +38,12 @@ const FADE_OUT = FadeOut.duration(DURATION.exit).easing(EASE_OUT);
 /** Dismiss when the drag (plus where the flick would carry it) passes this share of the screen. */
 const DISMISS_FRACTION = 0.25;
 
-export function listeningHint(phase: AssistantPhase): string {
-  if (phase === 'hearing') return 'Hearing you…';
+/** Gem doesn't listen while it speaks, so the hint says when the user can talk. */
+export function listeningHint(phase: AssistantPhase, speaking: boolean): string {
   if (phase === 'thinking') return 'Thinking…';
-  return 'Still listening — ask a follow-up anytime.';
+  if (speaking) return 'Gem is speaking — ask your next question when it finishes.';
+  if (phase === 'hearing') return 'Hearing you…';
+  return 'Listening — ask a follow-up anytime.';
 }
 
 export function AnswerSheet(props: {
@@ -146,9 +148,9 @@ export function AnswerSheet(props: {
           </Animated.ScrollView>
 
           <Row style={styles.hint}>
-            <View style={[styles.hintDot, { backgroundColor: phase === 'hearing' ? color.hearing : color.listening }]} />
+            <View style={[styles.hintDot, { backgroundColor: speaking ? color.textMuted : phase === 'hearing' ? color.hearing : color.listening }]} />
             <AppText variant="small" tone="muted" testID="assistant-answer-listening" style={{ flex: 1 }}>
-              {listeningHint(phase)}
+              {listeningHint(phase, speaking)}
             </AppText>
           </Row>
 

@@ -63,12 +63,11 @@ export const initialAssistantState: AssistantState = {
 };
 
 /**
- * The mic is ignored only while a question is being answered (no queued second prompt).
- * While Gem SPEAKS the mic stays live in barge-in mode, so the user can interrupt
- * ("wait, no, the other chair").
+ * The mic is ignored while Gem is answering: thinking (no queued second prompt) and
+ * speaking (Gem's own voice would be heard as a question). The user speaks when Gem is quiet.
  */
 export function isMicMuted(s: AssistantState): boolean {
-  return s.phase === 'starting' || s.phase === 'thinking';
+  return s.phase === 'starting' || s.phase === 'thinking' || s.speaking;
 }
 
 /** How long a transient notice ("I didn't catch that") stays on screen. */

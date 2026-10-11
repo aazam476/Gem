@@ -169,9 +169,8 @@ export interface FrameAck {
 }
 
 export type TurnInput =
-  /** `interrupted`: the user started speaking while Gem was still answering. */
-  | { audio_base64: string; audio_mime: 'audio/wav'; interrupted?: boolean }
-  | { text: string; interrupted?: boolean };
+  | { audio_base64: string; audio_mime: 'audio/wav' }
+  | { text: string };
 
 export interface TurnOut {
   turn_id: string;

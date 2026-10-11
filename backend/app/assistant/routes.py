@@ -77,7 +77,6 @@ class TurnIn(BaseModel):
     audio_base64: str | None = Field(default=None, max_length=6_000_000)
     audio_mime: str | None = None
     text: str | None = Field(default=None, max_length=2000)
-    interrupted: bool = Field(default=False, description="The user started talking while Gem was answering")
 
     @model_validator(mode="after")
     def _one_input(self) -> TurnIn:
@@ -217,7 +216,6 @@ def build_router(
                 audio=audio,
                 audio_mime=(body.audio_mime or "audio/wav") if audio is not None else None,
                 text=body.text.strip() if body.text is not None else None,
-                interrupted=body.interrupted,
                 documents=documents,
             )
             started = time.perf_counter()

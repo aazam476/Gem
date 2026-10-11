@@ -6,9 +6,9 @@
  * kept, so "read it again" replays locally with no network request; the backend also
  * caches the bytes, so ElevenLabs is billed once per answer either way.
  *
- * The mic stays open while Gem speaks (so the user can interrupt), so the audio session is
- * "play and record" routed explicitly to the loudspeaker, never the earpiece. If the audio
- * can't be fetched or doesn't start, the phone speaks the text itself.
+ * The mic is ignored while Gem speaks; the audio session stays "play and record" routed
+ * explicitly to the loudspeaker (never the earpiece) so listening resumes instantly
+ * afterwards. If the audio can't be fetched or doesn't start, the phone speaks the text itself.
  */
 import { createAudioPlayer, type AudioPlayer } from 'expo-audio';
 import { Directory, File, Paths } from 'expo-file-system';
@@ -20,8 +20,6 @@ import { ANSWER_AUDIO_CACHE_SIZE, AUDIO_START_TIMEOUT_MS } from '../config';
 import { enterListeningAudioMode } from './audioMode';
 
 type Listener = (speaking: boolean) => void;
-/** True only while Gem's voice is actually coming out of the speaker (not while downloading). */
-type AudibleListener = (audible: boolean) => void;
 type Sub = { remove: () => void };
 
 const DOWNLOAD_TIMEOUT_MS = 10_000;
@@ -48,7 +46,6 @@ export class AnswerAudio {
   constructor(
     private readonly onSpeaking: Listener,
     private readonly cacheSize: number = ANSWER_AUDIO_CACHE_SIZE,
-    private readonly onAudible: AudibleListener = () => undefined,
   ) {}
 
   /** Number of answers whose audio is held locally (for tests/diagnostics). */
@@ -60,7 +57,7 @@ export class AnswerAudio {
   async play(turnId: string, audioUrl: string | null, text: string): Promise<'remote' | 'device'> {
     this.stop();
     const gen = ++this.generation;
-    // Mark as speaking right away: the mic switches to barge-in mode before audio starts.
+    // Mark as speaking right away: the mic is muted before any audio comes out.
     this.onSpeaking(true);
     await enterListeningAudioMode();
     if (gen !== this.generation) return 'remote';
@@ -104,7 +101,6 @@ export class AnswerAudio {
       };
       this.sub = player.addListener('playbackStatusUpdate', (status) => {
         if (gen !== this.generation) return;
-        if (status.playing) this.onAudible(true);
         if (status.playing && !settled) {
           settled = true;
           clearTimeout(timer);
@@ -112,7 +108,6 @@ export class AnswerAudio {
         }
         if (status.didJustFinish) {
           log('finished', turnId);
-          this.onAudible(false);
           this.onSpeaking(false);
         }
       });
@@ -160,7 +155,6 @@ export class AnswerAudio {
       this.current = null;
     }
     void Speech.stop();
-    this.onAudible(false);
     this.onSpeaking(false);
   }
 
@@ -200,7 +194,6 @@ export class AnswerAudio {
     }
     const set = (speaking: boolean) => () => {
       if (gen !== this.generation) return;
-      this.onAudible(speaking);
       this.onSpeaking(speaking);
     };
     this.armWatchdog(gen, (estimateSeconds(text) + 5) * 1000);
@@ -220,7 +213,6 @@ export class AnswerAudio {
     this.watchdog = setTimeout(() => {
       if (gen === this.generation) {
         log('watchdog: assuming playback ended');
-        this.onAudible(false);
         this.onSpeaking(false);
       }
     }, ms);

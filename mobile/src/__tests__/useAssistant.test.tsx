@@ -1,4 +1,5 @@
 import { act, renderHook, waitFor } from '@testing-library/react-native';
+import type { CameraView } from 'expo-camera';
 import { createAudioPlayer } from 'expo-audio';
 import * as Speech from 'expo-speech';
 
@@ -203,12 +204,13 @@ describe('useAssistant', () => {
     expect(createAudioPlayer).toHaveBeenCalledTimes(1);
   });
 
-  it('lets the user interrupt Gem mid-answer ("wait, no, the other chair")', async () => {
-    let finish: (s: { playing: boolean; didJustFinish: boolean }) => void = () => undefined;
+  it('does not listen while Gem speaks, and listens again as soon as it finishes', async () => {
+    let status: (s: { playing: boolean; didJustFinish: boolean }) => void = () => undefined;
     const player = {
       playing: false, play: jest.fn(), pause: jest.fn(), remove: jest.fn(), seekTo: jest.fn(async () => undefined),
-      addListener: jest.fn((_e: string, cb: typeof finish) => {
-        finish = cb;
+      duration: 2,
+      addListener: jest.fn((_e: string, cb: typeof status) => {
+        status = cb;
         setTimeout(() => cb({ playing: true, didJustFinish: false }), 0);
         return { remove: jest.fn() };
       }),
@@ -218,30 +220,27 @@ describe('useAssistant', () => {
     const { result } = await setup();
     await act(async () => ask());
     await waitFor(() => expect(result.current.state.speaking).toBe(true));
-    // Gem is talking: the mic is live in barge-in (echo) mode, not muted
-    expect(mic.muted).toBe(false);
-    expect(mic.echo).toBe(true);
-    await act(async () => mic.onSpeechStart());
-    expect(player.pause).toHaveBeenCalled(); // Gem stops talking immediately
+    expect(mic.muted).toBe(true); // Gem's voice must not become a question
+    expect(mic.paused).toBe(true); // iOS: the stream steps aside for playback
+    await act(async () => status({ playing: false, didJustFinish: true }));
     expect(result.current.state.speaking).toBe(false);
-    expect(result.current.state.phase).toBe('hearing');
-    sendTurn.mockResolvedValue(turn({ turn_id: 't-2', answer: 'Sorry, this one.' }));
-    await act(async () => ask());
-    await waitFor(() => expect(result.current.state.answer?.turnId).toBe('t-2'));
-    expect(sendTurn.mock.calls[1][1]).toMatchObject({ audio_mime: 'audio/wav', interrupted: true });
-    void finish;
-  });
-
-  it('a follow-up after Gem finished is not marked as an interruption', async () => {
-    sendTurn.mockResolvedValue(turn());
-    const { result } = await setup();
-    await act(async () => ask());
-    await waitFor(() => expect(result.current.state.answer).not.toBeNull());
-    await act(async () => result.current.dismiss());
+    expect(mic.muted).toBe(false);
+    expect(mic.paused).toBe(false);
     await act(async () => mic.onSpeechStart());
     await act(async () => ask());
     await waitFor(() => expect(sendTurn).toHaveBeenCalledTimes(2));
-    expect(sendTurn.mock.calls[1][1].interrupted).toBeUndefined();
+    expect(sendTurn.mock.calls[1][1]).toEqual({ audio_base64: expect.any(String), audio_mime: 'audio/wav' });
+  });
+
+  it('asks the camera for a ~1080p capture size once it is ready (smooth preview)', async () => {
+    const { result } = await setup();
+    const getAvailablePictureSizesAsync = jest.fn(async () => ['3840x2160', '1920x1080', 'Photo']);
+    await act(async () => {
+      result.current.attachCamera({ getAvailablePictureSizesAsync } as unknown as CameraView);
+      result.current.onCameraReady();
+    });
+    await waitFor(() => expect(result.current.pictureSize).toBe('1920x1080'));
+    expect(result.current.cameraReady).toBe(true);
   });
 
   it('stops adding frames while an answer is shown and resumes after dismiss', async () => {
@@ -270,7 +269,7 @@ describe('useAssistant', () => {
         await jest.advanceTimersByTimeAsync(5000);
       });
       expect(sendFrame).toHaveBeenCalledTimes(2); // paused behind the answer
-      expect(mic.muted).toBe(false); // ...but still listening
+      expect(mic.muted).toBe(hook.result.current.state.speaking); // listening unless Gem is still talking
       await act(async () => hook.result.current.dismiss());
       await act(async () => {
         await jest.advanceTimersByTimeAsync(2050);

@@ -3,44 +3,30 @@
  * AudioStream (works in Expo Go), runs the VAD on-device, and hands each finished
  * utterance (16 kHz mono PCM) to `onUtterance`.
  *
- * - `muted` (Gem is thinking): buffers are ignored.
- * - `echo` (Gem is talking through the speaker): the user may interrupt.
- *   - Android: the stream keeps running and the VAD switches to barge-in (echo) mode.
- *   - iOS: AudioStream forces a record-only audio session and stops as soon as playback
- *     changes the session, so it CAN'T listen while Gem speaks. Instead the stream is
- *     paused and the file recorder (play-and-record, works during playback) runs with its
- *     level meter; when the user talks over Gem (MeterBargeInDetector) Gem is stopped, the
- *     recorded start of the user's speech seeds the VAD, and the stream resumes to capture
- *     the rest. When Gem finishes, the stream restarts immediately.
+ * - `muted` (Gem is thinking or speaking): buffers are ignored and any partial utterance
+ *   is dropped. The user talks to Gem only while Gem is quiet (no interrupting).
+ * - `paused` (Gem's voice is playing): on iOS the stream is stopped, because AudioStream
+ *   holds a record-only audio session that playback has to replace; it restarts the
+ *   moment Gem finishes. Android keeps the stream running (buffers are ignored).
+ * - For a short moment after unmuting, buffers are still ignored so the tail of Gem's
+ *   voice (or the room's echo of it) isn't taken for the user.
  * If stream buffers stop arriving, the stream is restarted (stall watchdog).
  */
-import {
-  AudioQuality,
-  IOSOutputFormat,
-  useAudioRecorder,
-  useAudioStream,
-  type AudioStreamBuffer,
-  type RecordingOptions,
-} from 'expo-audio';
-import { File } from 'expo-file-system';
+import { useAudioStream, type AudioStreamBuffer } from 'expo-audio';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 
 import { MIC_SAMPLE_RATE } from '../config';
-import { MeterBargeInDetector } from '../logic/bargeIn';
-import { TARGET_SAMPLE_RATE, resample, toMonoInt16 } from '../logic/pcm';
+import { TARGET_SAMPLE_RATE, resample, rmsDb, toMonoInt16 } from '../logic/pcm';
 import { VoiceActivityDetector } from '../logic/vad';
-import { decodeWav } from '../logic/wav';
 import { enterListeningAudioMode } from '../services/audioMode';
 
 export interface SpeechCaptureOptions {
   enabled: boolean;
+  /** Ignore the mic (Gem is thinking or speaking). */
   muted: boolean;
-  /** Gem is speaking (or about to): only the user clearly talking over it counts (barge-in). */
-  echo: boolean;
-  /** Gem's voice is actually audible now. iOS barge-in only measures/detects while true, so it
-   * never calibrates "Gem's echo" on the silence before playback starts. Defaults to `echo`. */
-  echoAudible?: boolean;
+  /** Gem's voice is playing: iOS stops the stream so playback gets the audio session. */
+  paused: boolean;
   onSpeechStart: () => void;
   onUtterance: (audio: Int16Array, sampleRate: number) => void;
   onDiscard: () => void;
@@ -52,29 +38,10 @@ export interface SpeechCapture {
 }
 
 export const MIC_STALL_MS = 4_000;
-export const METER_POLL_MS = 50;
-/** Audio kept from before the detected start of an interruption. */
-const BARGE_IN_PREROLL_MS = 300;
-
-/** iOS barge-in recorder: 16 kHz mono 16-bit WAV with level metering. */
-export const BARGE_IN_RECORDING: RecordingOptions = {
-  extension: '.wav',
-  sampleRate: TARGET_SAMPLE_RATE,
-  numberOfChannels: 1,
-  bitRate: 256_000,
-  isMeteringEnabled: true,
-  ios: {
-    extension: '.wav',
-    outputFormat: IOSOutputFormat.LINEARPCM,
-    audioQuality: AudioQuality.MAX,
-    sampleRate: TARGET_SAMPLE_RATE,
-    linearPCMBitDepth: 16,
-    linearPCMIsBigEndian: false,
-    linearPCMIsFloat: false,
-  },
-  android: { extension: '.m4a', outputFormat: 'mpeg4', audioEncoder: 'aac', sampleRate: TARGET_SAMPLE_RATE },
-  web: {},
-};
+/** Ignore the mic this long after Gem stops talking (speaker tail / room echo). */
+export const UNMUTE_GUARD_MS = 300;
+/** Dev log of mic health (buffers, level, noise floor) this often. */
+const HEALTH_LOG_MS = 5_000;
 
 function log(...args: unknown[]): void {
   if (__DEV__ && process.env.NODE_ENV !== 'test') console.log('[gem-mic]', ...args);
@@ -84,12 +51,14 @@ export function useSpeechCapture(options: SpeechCaptureOptions): SpeechCapture {
   const opts = useRef(options);
   const vad = useRef<VoiceActivityDetector | null>(null);
   const lastBufferAt = useRef(0);
-  const usingRecorder = useRef(false);
+  const ignoreUntil = useRef(0);
+  const paused = useRef(false);
   const mounted = useRef(true);
   const queue = useRef<Promise<void>>(Promise.resolve());
+  const health = useRef({ buffers: 0, peakDb: -120 });
   const [error, setError] = useState<string | null>(null);
   const [active, setActive] = useState(false);
-  const recorderBargeIn = Platform.OS === 'ios';
+  const pauseStream = Platform.OS === 'ios';
 
   const getVad = () => {
     if (!vad.current) vad.current = new VoiceActivityDetector();
@@ -99,8 +68,10 @@ export function useSpeechCapture(options: SpeechCaptureOptions): SpeechCapture {
   useEffect(() => {
     const prev = opts.current;
     opts.current = options;
-    if (options.muted && !prev.muted) vad.current?.reset();
-    vad.current?.setEchoMode(options.echo && !recorderBargeIn);
+    if (options.muted !== prev.muted) {
+      vad.current?.reset(); // never carry half an utterance across Gem's turn
+      if (!options.muted) ignoreUntil.current = Date.now() + UNMUTE_GUARD_MS;
+    }
   });
 
   useEffect(() => {
@@ -112,19 +83,26 @@ export function useSpeechCapture(options: SpeechCaptureOptions): SpeechCapture {
 
   const onBuffer = useCallback((buffer: AudioStreamBuffer) => {
     lastBufferAt.current = Date.now();
-    if (opts.current.muted || usingRecorder.current) return;
+    if (opts.current.muted || paused.current || Date.now() < ignoreUntil.current) return;
     const v = getVad();
-    v.setEchoMode(opts.current.echo && Platform.OS !== 'ios');
     const samples = resample(toMonoInt16(buffer.data, buffer.channels), buffer.sampleRate, TARGET_SAMPLE_RATE);
+    health.current.buffers += 1;
+    health.current.peakDb = Math.max(health.current.peakDb, rmsDb(samples));
     for (const ev of v.push(samples)) {
-      if (ev.type === 'speech_start') opts.current.onSpeechStart();
-      else if (ev.type === 'discarded') opts.current.onDiscard();
-      else opts.current.onUtterance(ev.audio, TARGET_SAMPLE_RATE);
+      if (ev.type === 'speech_start') {
+        log('speech started');
+        opts.current.onSpeechStart();
+      } else if (ev.type === 'discarded') {
+        log('dropped', ev.durationMs, 'ms: not enough voiced speech');
+        opts.current.onDiscard();
+      } else {
+        log('utterance', ev.durationMs, 'ms');
+        opts.current.onUtterance(ev.audio, TARGET_SAMPLE_RATE);
+      }
     }
   }, []);
 
   const { stream } = useAudioStream({ sampleRate: MIC_SAMPLE_RATE, channels: 1, encoding: 'int16', onBuffer });
-  const recorder = useAudioRecorder(BARGE_IN_RECORDING);
 
   // expo-audio's AudioStream is native-only; on web the hook returns a null stream.
   const unsupported = stream == null;
@@ -140,6 +118,7 @@ export function useSpeechCapture(options: SpeechCaptureOptions): SpeechCapture {
     await enterListeningAudioMode();
     await stream.start();
     lastBufferAt.current = Date.now();
+    log('stream started');
     if (mounted.current) {
       setActive(true);
       setError(null);
@@ -154,18 +133,29 @@ export function useSpeechCapture(options: SpeechCaptureOptions): SpeechCapture {
     return queue.current;
   }, []);
 
-  // Main stream lifecycle + stall watchdog.
+  // Main stream lifecycle + stall watchdog + dev health log.
   useEffect(() => {
     if (!options.enabled || stream == null) return;
     void enqueue(startStream);
     const watchdog = setInterval(() => {
-      if (!usingRecorder.current && Date.now() - lastBufferAt.current > MIC_STALL_MS) {
+      if (!paused.current && Date.now() - lastBufferAt.current > MIC_STALL_MS) {
         log('no mic audio for', MIC_STALL_MS, 'ms, restarting stream');
         void enqueue(startStream);
       }
     }, MIC_STALL_MS);
+    const healthLog = setInterval(() => {
+      const h = health.current;
+      const v = vad.current;
+      if (!opts.current.muted && !paused.current) {
+        log(
+          `${h.buffers} buffers, loudest ${h.peakDb.toFixed(0)} dB, noise floor ${v ? v.noiseFloorDb.toFixed(0) : '?'} dB`,
+        );
+      }
+      health.current = { buffers: 0, peakDb: -120 };
+    }, HEALTH_LOG_MS);
     return () => {
       clearInterval(watchdog);
+      clearInterval(healthLog);
       try {
         stream.stop();
       } catch {
@@ -176,77 +166,27 @@ export function useSpeechCapture(options: SpeechCaptureOptions): SpeechCapture {
     };
   }, [options.enabled, stream, enqueue, startStream]);
 
-  // iOS: listen for interruptions with the recorder while Gem speaks.
-  const recorderMode = recorderBargeIn && options.enabled && options.echo && stream != null;
+  // iOS: stop the stream while Gem's voice plays; restart it right after.
+  const pauseNow = pauseStream && options.enabled && options.paused && stream != null;
   useEffect(() => {
-    if (!recorderMode || stream == null) return;
-    let poll: ReturnType<typeof setInterval> | null = null;
-    let triggeredAtMs: number | null = null;
-    let startedAt = 0;
-    let audibleSince: number | null = null;
-    const detector = new MeterBargeInDetector();
-
+    if (!pauseNow || stream == null) return;
     void enqueue(async () => {
-      usingRecorder.current = true;
+      paused.current = true;
       try {
         stream.stop();
       } catch {
         // not running
       }
-      vad.current?.reset();
-      await enterListeningAudioMode();
-      await recorder.prepareToRecordAsync();
-      recorder.record();
-      startedAt = Date.now();
-      log('barge-in recorder listening');
-      poll = setInterval(() => {
-        const status = recorder.getStatus();
-        if (!status.isRecording || status.metering == null) return;
-        // Only listen for interruptions once Gem is audible; before that there is no echo to learn.
-        if (!(opts.current.echoAudible ?? opts.current.echo)) return;
-        const now = Date.now();
-        if (audibleSince === null) audibleSince = now;
-        const hit = detector.push(status.metering, now - audibleSince);
-        if (hit) {
-          // Convert to recorder time so the right part of the recording seeds the utterance.
-          triggeredAtMs = audibleSince - startedAt + hit.speechStartMs;
-          if (poll) clearInterval(poll);
-          poll = null;
-          log('user interrupted Gem at', hit.speechStartMs, 'ms (echo', detector.echoLevelDb, 'dB)');
-          opts.current.onSpeechStart(); // stops Gem -> echo=false -> cleanup below
-        }
-      }, METER_POLL_MS);
+      log('stream paused while Gem speaks');
     });
-
     return () => {
       void enqueue(async () => {
-        if (poll) clearInterval(poll);
-        poll = null;
-        let seed: Int16Array | null = null;
-        try {
-          await recorder.stop();
-          if (triggeredAtMs !== null && recorder.uri) {
-            const file = new File(recorder.uri);
-            const wav = decodeWav(new Uint8Array(await file.arrayBuffer()));
-            const pcm = resample(wav.samples, wav.sampleRate, TARGET_SAMPLE_RATE);
-            const from = Math.max(0, Math.floor(((triggeredAtMs - BARGE_IN_PREROLL_MS) / 1000) * TARGET_SAMPLE_RATE));
-            seed = pcm.slice(from);
-            try {
-              file.delete();
-            } catch {
-              // cache will be cleared anyway
-            }
-          }
-        } catch (err) {
-          log('could not read the barge-in recording', err);
-        }
-        usingRecorder.current = false;
+        paused.current = false;
         if (!mounted.current || !opts.current.enabled) return;
-        if (seed) getVad().beginUtterance(seed, detector.options.holdMs);
         await startStream(); // immediately: no gap after Gem finishes
       });
     };
-  }, [recorderMode, stream, recorder, enqueue, startStream]);
+  }, [pauseNow, stream, enqueue, startStream]);
 
   return { active, error: unsupported ? 'The live microphone only works in the phone app.' : error };
 }
