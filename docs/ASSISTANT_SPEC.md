@@ -115,7 +115,8 @@ camera + frames ──(you stop talking)──▶ thinking (mic ignored) ──�
 - While the answer screen is up, **no frames are added** to Gem's memory, so a follow-up
   refers to what you were looking at. Dismiss resumes 1 fps capture.
 - **Barge-in:** while Gem speaks, the VAD runs in echo mode: it measures Gem's own voice
-  through the mic for 0.4 s, then only speech ≥ 10 dB louder than that echo for 250 ms counts.
+  through the mic for 0.4 s, then only **voiced** speech ≥ 10 dB louder than that echo for
+  **450 ms** counts (a cough, "oh!", or a door won't cut Gem off).
   On speech start Gem stops talking immediately; the utterance is sent with
   `interrupted: true`, and Gemini is told it was interrupted.
 - **Echo safety net:** if Gem's voice still gets through, the server ignores a turn whose
@@ -126,16 +127,21 @@ camera + frames ──(you stop talking)──▶ thinking (mic ignored) ──�
   pick a *different* object/frame when corrected.
 - Audio session: "play and record" routed to the **loudspeaker** for the whole session.
   The phone has no app-controlled echo cancellation, so barge-in sensitivity depends on
-  speaker volume and room; tune `bargeInMarginDb` in `src/logic/vad.ts` (HUMAN_TESTS 2.6).
+  speaker volume and room. Tuning knobs in `DEFAULT_VAD` (`src/logic/vad.ts`):
+  `voicingThreshold` (0.45; higher = stricter about "is this a voice"), `startMarginDb` (15),
+  `minSpeechDb` (-45), `bargeInMarginDb` (10), `bargeInHoldMs` (450), `minSpeechMs` (350).
 
 ## 4. Speech-to-text
 
 - Capture: `expo-audio`'s `useAudioStream` (real-time PCM; available in Expo Go SDK 57,
   native only — the web preview shows a mic error; questions are asked on the phone).
-- End of speech: on-device energy VAD (`src/logic/vad.ts`): 0.5 s room calibration,
-  adaptive noise floor, speech = 15 dB over the floor for 150 ms, end = 1 s below
-  floor + 8 dB, 300 ms pre-roll, utterances < 350 ms of speech discarded, 30 s cap; a forced
-  cut re-learns the floor (steady fan/TV).
+- End of speech: on-device VAD (`src/logic/vad.ts`) using **loudness and voicing**. A 30 ms
+  frame counts as voice only if it is ≥ 15 dB over the adaptive noise floor (and ≥ -45 dBFS)
+  **and voiced** — normalized autocorrelation ≥ 0.45 at a human pitch period (80–400 Hz,
+  `pcm.voicing`). Clatter, clicks, rustling and fans are not periodic, so they don't count.
+  Speech starts after 200 ms of voiced frames (leaky counter, so short consonants don't
+  reset it); ends after 1 s below floor + 8 dB; 300 ms pre-roll; utterances with < 350 ms of
+  voiced speech are dropped on the phone (no Gemini call); 30 s cap; 0.5 s room calibration.
 - Transcription: done **by Gemini in the same call** that answers (the WAV is part of the
   prompt and the response includes `transcript`). One round trip instead of two, and the
   model hears tone and hesitation. Shown as "You said: …" and stored as text history.
