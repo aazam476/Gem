@@ -203,13 +203,13 @@ export function usePortal(): PortalController {
         activate: true,
       })
       .then((p) => {
-        setDeployMessage(`Deployed "${p.title}". Patients will get it on their next capture.`);
+        setDeployMessage(`Created "${p.title}" and made it the active protocol. New Gem sessions use it.`);
         refresh();
       })
       .catch((err: unknown) => {
         const detail =
           err instanceof ApiError ? (err.body.errors ?? []).map((e) => `${e.metric}: ${e.message}`) : [];
-        setFormErrors([err instanceof Error ? err.message : 'Deploy failed.', ...detail]);
+        setFormErrors([err instanceof Error ? err.message : 'Could not create the protocol.', ...detail]);
       })
       .finally(() => setDeploying(false));
   }, [deploying, draft, refresh]);

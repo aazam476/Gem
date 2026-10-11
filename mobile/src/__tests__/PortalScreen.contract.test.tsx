@@ -114,9 +114,17 @@ describe('PortalScreen contract', () => {
   });
 
   it('form errors and deploy message', async () => {
-    await renderWith({ formErrors: ['Give the protocol a title.'], deployMessage: 'Deployed "BP".' });
+    await renderWith({ formErrors: ['Give the protocol a title.'], deployMessage: 'Created "BP".' });
     expect(screen.getByTestId('portal-form-errors')).toHaveTextContent(/Give the protocol a title/);
     expect(screen.getByTestId('portal-deploy-message')).toBeTruthy();
+  });
+
+  it('a new protocol can be created from the portal', async () => {
+    const ctl = await renderWith();
+    expect(screen.getByTestId('portal-editor')).toHaveTextContent(/New protocol/);
+    expect(screen.getByTestId('portal-deploy')).toHaveTextContent('Create and activate');
+    await fireEvent.press(screen.getByTestId('portal-deploy'));
+    expect(ctl.deploy).toHaveBeenCalled();
   });
 
   it('protocol list activate/deactivate', async () => {

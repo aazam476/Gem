@@ -121,12 +121,12 @@ export function PortalScreen() {
         </Card>
 
         {/* ---------------- Protocols ---------------- */}
-        <SectionHeader title="Protocols" subtitle="Patients and Gem use the active protocol and its study context." />
+        <SectionHeader title="Protocols" subtitle="Patients and Gem use the active protocol and its study context. Add one under New protocol." />
 
         <Card testID="portal-protocols">
           {portal.protocols.length === 0 ? (
             <AppText tone="muted" testID="portal-protocols-empty" style={styles.empty}>
-              No protocols yet.
+              No protocols yet. Create one under New protocol below.
             </AppText>
           ) : null}
           {portal.protocols.map((p, i) => (
@@ -247,7 +247,7 @@ export function PortalScreen() {
         <Card testID="portal-editor">
           <Row style={{ justifyContent: 'space-between' }}>
             <AppText variant="body" weight="600">
-              New protocol step
+              New protocol
             </AppText>
             <Button
               testID="portal-load-bp-preset"
@@ -257,6 +257,10 @@ export function PortalScreen() {
               onPress={portal.loadBloodPressurePreset}
             />
           </Row>
+          <AppText variant="small" tone="muted">
+            Creating a protocol makes it the active one (only one is active at a time). Add its study context above
+            once it is created.
+          </AppText>
           <TextField testID="portal-title-input" label="Title" value={draft.title} onChangeText={portal.setTitle} />
           <TextField
             testID="portal-prompt-input"
@@ -320,7 +324,7 @@ export function PortalScreen() {
               {portal.deployMessage}
             </AppText>
           ) : null}
-          <Button testID="portal-deploy" label="Deploy to patients" onPress={portal.deploy} loading={portal.deploying} style={styles.actions} />
+          <Button testID="portal-deploy" label="Create and activate" onPress={portal.deploy} loading={portal.deploying} style={styles.actions} />
         </Card>
 
         {/* ---------------- Gateway ---------------- */}
