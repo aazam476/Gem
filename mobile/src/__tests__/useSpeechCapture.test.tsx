@@ -61,6 +61,23 @@ describe('useSpeechCapture', () => {
     await act(async () => buffers(audio).forEach((b) => onBuffer(b)));
     expect(o.onSpeechStart).not.toHaveBeenCalled();
     expect(o.onUtterance).not.toHaveBeenCalled();
+    expect(stream.start).not.toHaveBeenCalled(); // muted = mic actually off
+  });
+
+  it('stops the mic when muted and restarts it in recording mode afterwards', async () => {
+    const { setAudioModeAsync } = jest.requireMock('expo-audio');
+    const stream = { start: jest.fn(async () => undefined), stop: jest.fn() };
+    mocked.mockImplementation(() => ({ stream, isStreaming: true }));
+    let o = opts();
+    const { rerender } = await renderHook(() => useSpeechCapture(o));
+    expect(stream.start).toHaveBeenCalledTimes(1);
+    expect(setAudioModeAsync).toHaveBeenCalledWith(expect.objectContaining({ allowsRecording: true }));
+    o = opts({ muted: true });
+    await rerender({});
+    expect(stream.stop).toHaveBeenCalledTimes(1);
+    o = opts({ muted: false });
+    await rerender({});
+    expect(stream.start).toHaveBeenCalledTimes(2);
   });
 
   it('reports when live audio is unavailable (web)', async () => {

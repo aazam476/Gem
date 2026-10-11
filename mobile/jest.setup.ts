@@ -57,3 +57,31 @@ jest.mock('expo-image-manipulator', () => ({
     }),
   },
 }));
+
+jest.mock('expo-file-system', () => {
+  class Directory {
+    uri: string;
+    exists = true;
+    constructor(...parts: unknown[]) {
+      this.uri = parts.map((p) => (typeof p === 'string' ? p : (p as { uri: string }).uri)).join('/');
+    }
+    create() {
+      this.exists = true;
+    }
+  }
+  class File {
+    uri: string;
+    exists = false;
+    size = 0;
+    delete = jest.fn();
+    constructor(...parts: unknown[]) {
+      this.uri = 'file://' + parts.map((p) => (typeof p === 'string' ? p : (p as { uri: string }).uri)).join('/');
+    }
+    static downloadFileAsync = jest.fn(async (_url: string, target: File) => {
+      target.exists = true;
+      target.size = 24_000;
+      return target;
+    });
+  }
+  return { Directory, File, Paths: { cache: new Directory('cache') } };
+});

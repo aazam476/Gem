@@ -1,10 +1,13 @@
 /**
  * Always-on microphone with end-of-speech detection. Streams PCM from expo-audio's
  * AudioStream (works in Expo Go), runs the VAD on-device, and hands each finished
- * utterance (16 kHz mono PCM) to `onUtterance`. While `muted` (Gem is thinking or
- * talking) buffers are dropped so Gem never hears itself.
+ * utterance (16 kHz mono PCM) to `onUtterance`.
+ *
+ * While `muted` (Gem is thinking or talking) the stream is STOPPED, not just ignored:
+ * Gem never hears itself, and iOS can leave its "record + play" audio route so Gem's
+ * voice comes out of the loudspeaker instead of the earpiece.
  */
-import { useAudioStream, type AudioStreamBuffer } from 'expo-audio';
+import { setAudioModeAsync, useAudioStream, type AudioStreamBuffer } from 'expo-audio';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { MIC_SAMPLE_RATE } from '../config';
@@ -52,11 +55,14 @@ export function useSpeechCapture(options: SpeechCaptureOptions): SpeechCapture {
   // expo-audio's AudioStream is native-only; on web the hook returns a null stream.
   const unsupported = stream == null;
 
+  const listening = options.enabled && !options.muted;
+
   useEffect(() => {
-    if (!options.enabled || stream == null) return;
+    if (!listening || stream == null) return;
     let cancelled = false;
-    stream
-      .start()
+    setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true, shouldRouteThroughEarpiece: false })
+      .catch(() => undefined)
+      .then(() => (cancelled ? undefined : stream.start()))
       .then(() => {
         if (!cancelled) {
           setActive(true);
@@ -76,7 +82,7 @@ export function useSpeechCapture(options: SpeechCaptureOptions): SpeechCapture {
       vad.current?.reset();
       setActive(false);
     };
-  }, [options.enabled, stream]);
+  }, [listening, stream]);
 
   return { active, error: unsupported ? 'Live microphone is not available here. Type your question instead.' : error };
 }

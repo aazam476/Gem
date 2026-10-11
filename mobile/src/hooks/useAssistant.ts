@@ -100,7 +100,6 @@ export function useAssistant(): AssistantController {
   }, [ensureSession]);
 
   useEffect(() => {
-    void audio.current?.configure();
     startSession();
     const sub = AppState.addEventListener('change', (s) => setAppActive(s !== 'background'));
     const player = audio.current;
