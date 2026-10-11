@@ -68,58 +68,6 @@ export function PortalScreen() {
           </View>
         </View>
 
-        {/* ---------------- Gem assistant ---------------- */}
-        <SectionHeader title="Gem assistant" subtitle="How the patient app behaves." />
-
-        <Card testID="portal-settings">
-          <AppText variant="body" weight="600">
-            Inactivity
-          </AppText>
-          <AppText variant="small" tone="muted">
-            When nobody moves the phone, speaks or changes the view, Gem stops capturing frames, then forgets the
-            conversation. Applies to Gem sessions started after saving.
-          </AppText>
-          <Row style={styles.fields}>
-            <TextField
-              testID="portal-idle-minutes"
-              label="Pause camera after"
-              value={portal.idleMinutes}
-              onChangeText={portal.setIdleMinutes}
-              numeric
-              suffix="min"
-              width={190}
-            />
-            <TextField
-              testID="portal-purge-minutes"
-              label="Forget conversation after"
-              value={portal.purgeMinutes}
-              onChangeText={portal.setPurgeMinutes}
-              numeric
-              suffix="min"
-              width={190}
-            />
-          </Row>
-          <Row style={styles.actions}>
-            <Button
-              testID="portal-settings-save"
-              label="Save"
-              compact
-              onPress={portal.saveSettings}
-              loading={portal.settingsSaving}
-            />
-            {portal.settingsMessage ? (
-              <AppText variant="small" tone="success" testID="portal-settings-message">
-                {portal.settingsMessage}
-              </AppText>
-            ) : null}
-            {portal.settingsError ? (
-              <AppText variant="small" tone="danger" testID="portal-settings-error">
-                {portal.settingsError}
-              </AppText>
-            ) : null}
-          </Row>
-        </Card>
-
         {/* ---------------- Protocols ---------------- */}
         <SectionHeader title="Protocols" subtitle="Patients and Gem use the active protocol and its study context. Add one under New protocol." />
 
@@ -396,6 +344,58 @@ export function PortalScreen() {
               </View>
             </View>
           ))}
+        </Card>
+
+        {/* ---------------- Settings ---------------- */}
+        <SectionHeader title="Settings" subtitle="How the Gem patient app behaves." />
+
+        <Card testID="portal-settings">
+          <AppText variant="body" weight="600">
+            Inactivity
+          </AppText>
+          <AppText variant="small" tone="muted">
+            When nobody moves the phone, speaks or changes the view, Gem stops capturing frames, then forgets the
+            conversation. Applies to Gem sessions started after saving.
+          </AppText>
+          <Row style={styles.fields}>
+            <TextField
+              testID="portal-idle-minutes"
+              label="Pause camera after"
+              value={portal.idleMinutes}
+              onChangeText={portal.setIdleMinutes}
+              numeric
+              suffix="min"
+              width={190}
+            />
+            <TextField
+              testID="portal-purge-minutes"
+              label="Forget conversation after"
+              value={portal.purgeMinutes}
+              onChangeText={portal.setPurgeMinutes}
+              numeric
+              suffix="min"
+              width={190}
+            />
+          </Row>
+          <Row style={styles.actions}>
+            <Button
+              testID="portal-settings-save"
+              label="Save"
+              compact
+              onPress={portal.saveSettings}
+              loading={portal.settingsSaving}
+            />
+            {portal.settingsMessage ? (
+              <AppText variant="small" tone="success" testID="portal-settings-message">
+                {portal.settingsMessage}
+              </AppText>
+            ) : null}
+            {portal.settingsError ? (
+              <AppText variant="small" tone="danger" testID="portal-settings-error">
+                {portal.settingsError}
+              </AppText>
+            ) : null}
+          </Row>
         </Card>
       </View>
     </Screen>

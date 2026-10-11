@@ -220,7 +220,7 @@ vanish with the session.
 | Scene change | server `change_score` of each frame | ≥ 0.08 (camera noise is ~0.01) |
 | Interaction / Gem busy | Dismiss, Read again, Try again; thinking or speaking | always |
 
-Both times are set by researchers in the portal ("Gem assistant → Inactivity",
+Both times are set by researchers in the portal ("Settings → Inactivity",
 `PUT /settings/assistant`, defaults 1 and 10 minutes) and reach the app with each new
 session (`idle_after_s`, `purge_after_s`).
 
