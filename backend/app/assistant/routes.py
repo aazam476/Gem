@@ -22,6 +22,7 @@ from ..imaging import ImageError, prepare_image
 from ..schemas import ID_PATTERN
 from ..voice import ElevenLabsVoice, VoiceError
 from .brain import Brain, BrainError, Prompt, PromptFrame, build_system_prompt
+from .echo import is_echo
 from .render import render
 from .sessions import Session, SessionExpired, SessionNotFound, SessionStore, Turn
 
@@ -72,6 +73,7 @@ class TurnIn(BaseModel):
     audio_base64: str | None = Field(default=None, max_length=6_000_000)
     audio_mime: str | None = None
     text: str | None = Field(default=None, max_length=2000)
+    interrupted: bool = Field(default=False, description="The user started talking while Gem was answering")
 
     @model_validator(mode="after")
     def _one_input(self) -> TurnIn:
@@ -203,6 +205,7 @@ def build_router(
                 audio=audio,
                 audio_mime=(body.audio_mime or "audio/wav") if audio is not None else None,
                 text=body.text.strip() if body.text is not None else None,
+                interrupted=body.interrupted,
             )
             started = time.perf_counter()
             try:
@@ -216,6 +219,10 @@ def build_router(
             store.touch(s)
 
             turn_id = str(uuid.uuid4())
+            last_answer = next((h["text"] for h in reversed(s.history) if h["role"] == "model"), None)
+            if reply.is_request and is_echo(reply.transcript, last_answer):
+                log.info("turn in session %s ignored: transcript is Gem's own answer (echo)", session_id)
+                reply = type(reply)(reply.transcript, False, "", (), None)
             if not reply.is_request:
                 return TurnOut(turn_id=turn_id, status="ignored", transcript=reply.transcript, answer="",
                                annotations=[], image_url=None, image_width=0, image_height=0,
@@ -228,8 +235,11 @@ def build_router(
                 image_jpeg, w, h = await asyncio.to_thread(render, shown.jpeg, reply.annotations)
 
             s.history.append({"role": "user", "text": reply.transcript or (body.text or "")})
+            # Exact boxes go into the history so "no, the other chair" can exclude them.
             marked = (
-                f" [Marked on frame {shown.frame_id}: {', '.join(a.label for a in reply.annotations)}]"
+                f" [Marked on frame {shown.frame_id}: "
+                + "; ".join(f"{a.label} at {list(a.box_2d)}" for a in reply.annotations)
+                + "]"
                 if reply.annotations and shown is not None else ""
             )
             s.history.append({"role": "model", "text": reply.answer + marked})
