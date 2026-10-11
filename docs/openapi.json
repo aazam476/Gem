@@ -1,0 +1,1280 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Gem API",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Health",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/presets/blood_pressure": {
+      "get": {
+        "summary": "Bp Preset",
+        "operationId": "bp_preset_presets_blood_pressure_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationRules"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/protocols": {
+      "get": {
+        "summary": "List Protocols",
+        "operationId": "list_protocols_protocols_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ProtocolOut"
+                  },
+                  "type": "array",
+                  "title": "Response List Protocols Protocols Get"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create Protocol",
+        "operationId": "create_protocol_protocols_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProtocolCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProtocolOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/protocols/active": {
+      "get": {
+        "summary": "Active Protocol",
+        "operationId": "active_protocol_protocols_active_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProtocolOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/protocols/{protocol_id}": {
+      "get": {
+        "summary": "Get Protocol",
+        "operationId": "get_protocol_protocols__protocol_id__get",
+        "parameters": [
+          {
+            "name": "protocol_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Protocol Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProtocolOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/protocols/{protocol_id}/activate": {
+      "post": {
+        "summary": "Activate",
+        "operationId": "activate_protocols__protocol_id__activate_post",
+        "parameters": [
+          {
+            "name": "protocol_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Protocol Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProtocolOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/protocols/{protocol_id}/deactivate": {
+      "post": {
+        "summary": "Deactivate",
+        "operationId": "deactivate_protocols__protocol_id__deactivate_post",
+        "parameters": [
+          {
+            "name": "protocol_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Protocol Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProtocolOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ingest_vitals": {
+      "post": {
+        "summary": "Ingest Vitals",
+        "operationId": "ingest_vitals_ingest_vitals_post",
+        "parameters": [
+          {
+            "name": "x-gateway-token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Gateway-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IngestRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/events": {
+      "get": {
+        "summary": "Events",
+        "operationId": "events_events_get",
+        "parameters": [
+          {
+            "name": "protocol_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Protocol Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  "title": "Response Events Events Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/rejections": {
+      "get": {
+        "summary": "Rejections",
+        "operationId": "rejections_rejections_get",
+        "parameters": [
+          {
+            "name": "protocol_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Protocol Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  "title": "Response Rejections Rejections Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/metrics/gateway": {
+      "get": {
+        "summary": "Gateway Metrics",
+        "operationId": "gateway_metrics_metrics_gateway_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Gateway Metrics Metrics Gateway Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/metrics/gateway/reset": {
+      "post": {
+        "summary": "Reset Metrics",
+        "operationId": "reset_metrics_metrics_gateway_reset_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Reset Metrics Metrics Gateway Reset Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/captures": {
+      "post": {
+        "summary": "Create Capture",
+        "operationId": "create_capture_captures_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CaptureCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaptureOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/captures/{capture_id}/confirm": {
+      "post": {
+        "summary": "Confirm Capture",
+        "operationId": "confirm_capture_captures__capture_id__confirm_post",
+        "parameters": [
+          {
+            "name": "capture_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Capture Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/captures/{capture_id}/discard": {
+      "post": {
+        "summary": "Discard Capture",
+        "operationId": "discard_capture_captures__capture_id__discard_post",
+        "parameters": [
+          {
+            "name": "capture_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Capture Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Discard Capture Captures  Capture Id  Discard Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/captures/{capture_id}/speech": {
+      "get": {
+        "summary": "Capture Speech",
+        "operationId": "capture_speech_captures__capture_id__speech_get",
+        "parameters": [
+          {
+            "name": "capture_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Capture Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Capture Speech Captures  Capture Id  Speech Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "CaptureCreate": {
+        "properties": {
+          "protocol_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.:-]{1,128}$",
+            "title": "Protocol Id"
+          },
+          "patient_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.:-]{1,128}$",
+            "title": "Patient Id"
+          },
+          "session_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.:-]{1,128}$",
+            "title": "Session Id"
+          },
+          "image_base64": {
+            "type": "string",
+            "maxLength": 9000000,
+            "minLength": 1,
+            "title": "Image Base64"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "protocol_id",
+          "patient_id",
+          "session_id",
+          "image_base64"
+        ],
+        "title": "CaptureCreate"
+      },
+      "CaptureOut": {
+        "properties": {
+          "capture_id": {
+            "type": "string",
+            "title": "Capture Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "needs_confirmation",
+              "unreadable",
+              "rejected"
+            ],
+            "title": "Status"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason",
+            "description": "Why the frame was dropped: no_display | invalid_output | ai_timeout | ai_error | gateway_rejected"
+          },
+          "bounding_box": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bounding Box",
+            "description": "[ymin, xmin, ymax, xmax], 0-1000"
+          },
+          "image_width": {
+            "type": "integer",
+            "title": "Image Width"
+          },
+          "image_height": {
+            "type": "integer",
+            "title": "Image Height"
+          },
+          "readings": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "number"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Readings"
+          },
+          "flags": {
+            "items": {
+              "$ref": "#/components/schemas/Issue"
+            },
+            "type": "array",
+            "title": "Flags",
+            "default": []
+          },
+          "errors": {
+            "items": {
+              "$ref": "#/components/schemas/Issue"
+            },
+            "type": "array",
+            "title": "Errors",
+            "default": []
+          },
+          "voice_line_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Voice Line Id",
+            "description": "Set when voice_script is a fixed line"
+          },
+          "voice_script": {
+            "type": "string",
+            "title": "Voice Script"
+          },
+          "audio_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audio Url",
+            "description": "Streams ElevenLabs audio for voice_script"
+          },
+          "ai_latency_ms": {
+            "type": "number",
+            "title": "Ai Latency Ms"
+          },
+          "validation_ns": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validation Ns"
+          }
+        },
+        "type": "object",
+        "required": [
+          "capture_id",
+          "status",
+          "image_width",
+          "image_height",
+          "voice_script",
+          "ai_latency_ms"
+        ],
+        "title": "CaptureOut"
+      },
+      "ConfirmRequest": {
+        "properties": {
+          "idempotency_key": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.:-]{1,128}$",
+            "title": "Idempotency Key"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "idempotency_key"
+        ],
+        "title": "ConfirmRequest"
+      },
+      "CrossFieldRule": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "greater_than",
+            "title": "Type",
+            "default": "greater_than"
+          },
+          "left": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,31}$",
+            "title": "Left"
+          },
+          "right": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,31}$",
+            "title": "Right"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "left",
+          "right"
+        ],
+        "title": "CrossFieldRule"
+      },
+      "EventOut": {
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "title": "Event Id"
+          },
+          "protocol_id": {
+            "type": "string",
+            "title": "Protocol Id"
+          },
+          "patient_id": {
+            "type": "string",
+            "title": "Patient Id"
+          },
+          "session_id": {
+            "type": "string",
+            "title": "Session Id"
+          },
+          "capture_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capture Id"
+          },
+          "idempotency_key": {
+            "type": "string",
+            "title": "Idempotency Key"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "accepted",
+              "flagged"
+            ],
+            "title": "Status"
+          },
+          "extracted_data": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Extracted Data"
+          },
+          "flags": {
+            "items": {
+              "$ref": "#/components/schemas/Issue"
+            },
+            "type": "array",
+            "title": "Flags"
+          },
+          "validation_ns": {
+            "type": "integer",
+            "title": "Validation Ns"
+          },
+          "timestamp": {
+            "type": "string",
+            "title": "Timestamp"
+          }
+        },
+        "type": "object",
+        "required": [
+          "event_id",
+          "protocol_id",
+          "patient_id",
+          "session_id",
+          "capture_id",
+          "idempotency_key",
+          "status",
+          "extracted_data",
+          "flags",
+          "validation_ns",
+          "timestamp"
+        ],
+        "title": "EventOut"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "HealthOut": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "const": "ok",
+            "title": "Status"
+          },
+          "ai_mode": {
+            "type": "string",
+            "enum": [
+              "gemini",
+              "mock"
+            ],
+            "title": "Ai Mode"
+          },
+          "voice_enabled": {
+            "type": "boolean",
+            "title": "Voice Enabled"
+          },
+          "gemini_model": {
+            "type": "string",
+            "title": "Gemini Model"
+          },
+          "active_protocol_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Protocol Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "ai_mode",
+          "voice_enabled",
+          "gemini_model",
+          "active_protocol_id"
+        ],
+        "title": "HealthOut"
+      },
+      "IngestRequest": {
+        "properties": {
+          "protocol_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.:-]{1,128}$",
+            "title": "Protocol Id"
+          },
+          "patient_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.:-]{1,128}$",
+            "title": "Patient Id"
+          },
+          "session_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.:-]{1,128}$",
+            "title": "Session Id"
+          },
+          "idempotency_key": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.:-]{1,128}$",
+            "title": "Idempotency Key"
+          },
+          "readings": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Readings"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "protocol_id",
+          "patient_id",
+          "session_id",
+          "idempotency_key",
+          "readings"
+        ],
+        "title": "IngestRequest",
+        "description": "Direct gateway submission. ``readings`` is deliberately untyped: the gateway,\nnot the HTTP layer, decides whether values are acceptable (and logs rejections)."
+      },
+      "IngestResponse": {
+        "properties": {
+          "result": {
+            "type": "string",
+            "enum": [
+              "accepted",
+              "flagged"
+            ],
+            "title": "Result"
+          },
+          "event": {
+            "$ref": "#/components/schemas/EventOut"
+          },
+          "validation_ns": {
+            "type": "integer",
+            "title": "Validation Ns"
+          },
+          "voice_line_id": {
+            "type": "string",
+            "enum": [
+              "saved",
+              "saved_flagged"
+            ],
+            "title": "Voice Line Id"
+          },
+          "voice_script": {
+            "type": "string",
+            "title": "Voice Script"
+          }
+        },
+        "type": "object",
+        "required": [
+          "result",
+          "event",
+          "validation_ns",
+          "voice_line_id",
+          "voice_script"
+        ],
+        "title": "IngestResponse"
+      },
+      "Issue": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "metric": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metric"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "metric",
+          "message"
+        ],
+        "title": "Issue"
+      },
+      "MetricRule": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,31}$",
+            "title": "Name",
+            "description": "Machine key, e.g. 'systolic'"
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 64,
+            "title": "Label",
+            "description": "Spoken/display name",
+            "default": ""
+          },
+          "unit": {
+            "type": "string",
+            "maxLength": 16,
+            "title": "Unit",
+            "default": ""
+          },
+          "min": {
+            "type": "number",
+            "title": "Min"
+          },
+          "max": {
+            "type": "number",
+            "title": "Max"
+          },
+          "hard_min": {
+            "type": "number",
+            "title": "Hard Min"
+          },
+          "hard_max": {
+            "type": "number",
+            "title": "Hard Max"
+          },
+          "required": {
+            "type": "boolean",
+            "title": "Required",
+            "default": true
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "min",
+          "max",
+          "hard_min",
+          "hard_max"
+        ],
+        "title": "MetricRule"
+      },
+      "ProtocolCreate": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "prompt_text": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Prompt Text"
+          },
+          "validation_rules": {
+            "$ref": "#/components/schemas/ValidationRules"
+          },
+          "activate": {
+            "type": "boolean",
+            "title": "Activate",
+            "default": true
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "title",
+          "prompt_text",
+          "validation_rules"
+        ],
+        "title": "ProtocolCreate"
+      },
+      "ProtocolOut": {
+        "properties": {
+          "protocol_id": {
+            "type": "string",
+            "title": "Protocol Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "prompt_text": {
+            "type": "string",
+            "title": "Prompt Text"
+          },
+          "validation_rules": {
+            "$ref": "#/components/schemas/ValidationRules"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "protocol_id",
+          "title",
+          "prompt_text",
+          "validation_rules",
+          "is_active",
+          "created_at"
+        ],
+        "title": "ProtocolOut"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "ValidationRules": {
+        "properties": {
+          "metrics": {
+            "items": {
+              "$ref": "#/components/schemas/MetricRule"
+            },
+            "type": "array",
+            "maxItems": 12,
+            "minItems": 1,
+            "title": "Metrics"
+          },
+          "cross_field": {
+            "items": {
+              "$ref": "#/components/schemas/CrossFieldRule"
+            },
+            "type": "array",
+            "maxItems": 12,
+            "title": "Cross Field"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "metrics"
+        ],
+        "title": "ValidationRules"
+      }
+    }
+  }
+}
