@@ -112,3 +112,7 @@ jest.mock('expo-sensors', () => {
   };
   return { Accelerometer: make(), Gyroscope: make() };
 });
+
+jest.mock('expo-document-picker', () => ({
+  getDocumentAsync: jest.fn(async () => ({ canceled: true, assets: null })),
+}));

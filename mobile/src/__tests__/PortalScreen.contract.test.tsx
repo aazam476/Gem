@@ -25,6 +25,23 @@ function controller(overrides: Partial<PortalController> = {}): PortalController
       },
     ],
     metrics: { validation: { count: 3, p50_us: 2, p95_us: 3, p99_us: 4, max_us: 5, mean_us: 2 }, events_stored: 2 },
+    documentsProtocol: protocol,
+    documents: [
+      { doc_id: 'd-1', protocol_id: 'p-1', kind: 'note', title: 'About the study', mime_type: 'text/plain',
+        size_bytes: 120, created_at: '2026-10-11T00:00:00Z', text: 'We collect morning BP.', uploaded_to_gemini: false },
+      { doc_id: 'd-2', protocol_id: 'p-1', kind: 'pdf', title: 'Omron manual', mime_type: 'application/pdf',
+        size_bytes: 2_400_000, created_at: '2026-10-11T00:00:00Z', text: null, uploaded_to_gemini: true },
+    ],
+    noteTitle: '',
+    noteText: '',
+    documentsBusy: false,
+    documentsError: null,
+    setNoteTitle: jest.fn(),
+    setNoteText: jest.fn(),
+    selectDocumentsProtocol: jest.fn(),
+    addNote: jest.fn(),
+    uploadFile: jest.fn(),
+    deleteDocument: jest.fn(),
     draft: { title: 'BP', promptText: 'Read it', rules: draftFromRules(protocol.validation_rules) },
     formErrors: [],
     deploying: false,
@@ -109,6 +126,37 @@ describe('PortalScreen contract', () => {
     expect(screen.getByTestId('portal-event-e-2')).toHaveTextContent(/Flagged/);
     expect(screen.getByTestId('portal-rejection-r-1')).toHaveTextContent(/900/);
     expect(screen.getByTestId('portal-latency')).toHaveTextContent(/p95 3 µs/);
+  });
+
+  it('study documents: list, add note, upload, remove, switch protocol', async () => {
+    const ctl = await renderWith();
+    expect(screen.getByTestId('portal-documents-protocol')).toHaveTextContent(/Home blood pressure/);
+    expect(screen.getByTestId('portal-document-d-1')).toHaveTextContent(/About the study/);
+    expect(screen.getByTestId('portal-document-d-2')).toHaveTextContent(/ready for Gem/);
+    await fireEvent.changeText(screen.getByTestId('portal-note-title'), 'Device');
+    await fireEvent.changeText(screen.getByTestId('portal-note-text'), 'Omron M7');
+    await fireEvent.press(screen.getByTestId('portal-note-add'));
+    await fireEvent.press(screen.getByTestId('portal-upload-file'));
+    await fireEvent.press(screen.getByTestId('portal-document-delete-d-2'));
+    await fireEvent.press(screen.getByTestId('portal-documents-select-p-0'));
+    expect(ctl.setNoteTitle).toHaveBeenCalledWith('Device');
+    expect(ctl.setNoteText).toHaveBeenCalledWith('Omron M7');
+    expect(ctl.addNote).toHaveBeenCalled();
+    expect(ctl.uploadFile).toHaveBeenCalled();
+    expect(ctl.deleteDocument).toHaveBeenCalledWith('d-2');
+    expect(ctl.selectDocumentsProtocol).toHaveBeenCalledWith('p-0');
+  });
+
+  it('study documents: empty, error, and no-protocol states', async () => {
+    await renderWith({ documents: [], documentsError: 'That file is larger than 20 MB.' });
+    expect(screen.getByTestId('portal-documents-empty')).toBeTruthy();
+    expect(screen.getByTestId('portal-documents-error')).toHaveTextContent(/20 MB/);
+  });
+
+  it('study documents need a protocol', async () => {
+    await renderWith({ documentsProtocol: null, protocols: [] });
+    expect(screen.getByTestId('portal-documents-no-protocol')).toBeTruthy();
+    expect(screen.queryByTestId('portal-upload-file')).toBeNull();
   });
 
   it('empty and disconnected states', async () => {

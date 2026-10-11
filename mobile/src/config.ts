@@ -33,3 +33,9 @@ export const TURN_TIMEOUT_MS = 30_000;
 export const MIC_SAMPLE_RATE = 16_000;
 /** Answer audio players kept in RAM for instant replays. */
 export const ANSWER_AUDIO_CACHE_SIZE = 5;
+
+// -- Researcher portal: study documents ---------------------------------------------------
+export const UPLOAD_TIMEOUT_MS = 120_000;
+/** Must match the backend limit (GEM max_document_bytes). */
+export const MAX_DOCUMENT_BYTES = 20_000_000;
+export const DOCUMENT_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];

@@ -1,4 +1,11 @@
-import { API_URL, ANALYZE_TIMEOUT_MS, DEFAULT_TIMEOUT_MS, FRAME_TIMEOUT_MS, TURN_TIMEOUT_MS } from '../config';
+import {
+  API_URL,
+  ANALYZE_TIMEOUT_MS,
+  DEFAULT_TIMEOUT_MS,
+  FRAME_TIMEOUT_MS,
+  TURN_TIMEOUT_MS,
+  UPLOAD_TIMEOUT_MS,
+} from '../config';
 import type {
   AssistantSession,
   FrameAck,
@@ -8,6 +15,8 @@ import type {
   ClinicalEvent,
   ErrorBody,
   GatewayMetrics,
+  StudyDocument,
+  StudyFileUpload,
   Health,
   IngestResponse,
   Protocol,
@@ -122,6 +131,18 @@ export const api = {
       'POST',
       `/captures/${encodeURIComponent(captureId)}/discard`,
     ),
+
+  // Study documents Gem reads (researcher portal)
+  listDocuments: (protocolId: string) =>
+    request<StudyDocument[]>('GET', `/protocols/${encodeURIComponent(protocolId)}/documents`),
+  addNote: (protocolId: string, title: string, text: string) =>
+    request<StudyDocument>('POST', `/protocols/${encodeURIComponent(protocolId)}/documents/notes`, { title, text }),
+  addFile: (protocolId: string, file: StudyFileUpload) =>
+    request<StudyDocument>('POST', `/protocols/${encodeURIComponent(protocolId)}/documents/files`, file, UPLOAD_TIMEOUT_MS),
+  deleteDocument: (protocolId: string, docId: string) =>
+    request<null>('DELETE', `/protocols/${encodeURIComponent(protocolId)}/documents/${encodeURIComponent(docId)}`),
+  documentUrl: (protocolId: string, docId: string) =>
+    absoluteUrl(`/protocols/${encodeURIComponent(protocolId)}/documents/${encodeURIComponent(docId)}/content`),
 
   // Gem assistant
   createSession: () => request<AssistantSession>('POST', '/sessions', {}),

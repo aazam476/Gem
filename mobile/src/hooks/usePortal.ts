@@ -4,7 +4,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { ApiError, api } from '../api/client';
-import type { ClinicalEvent, GatewayMetrics, Health, Protocol, Rejection } from '../api/types';
+import type { ClinicalEvent, GatewayMetrics, Health, Protocol, Rejection, StudyDocument } from '../api/types';
+import { PickError, pickStudyFile } from '../services/pickFile';
 import { draftFromRules, emptyMetric, rulesFromDraft, type MetricDraft, type RulesDraft } from '../logic/rulesForm';
 
 export const POLL_MS = 4000;
@@ -23,6 +24,20 @@ export interface PortalController {
   events: ClinicalEvent[];
   rejections: Rejection[];
   metrics: GatewayMetrics | null;
+
+  /** Protocol whose study documents are shown (defaults to the active one). */
+  documentsProtocol: Protocol | null;
+  documents: StudyDocument[];
+  noteTitle: string;
+  noteText: string;
+  documentsBusy: boolean;
+  documentsError: string | null;
+  setNoteTitle: (v: string) => void;
+  setNoteText: (v: string) => void;
+  selectDocumentsProtocol: (protocolId: string) => void;
+  addNote: () => void;
+  uploadFile: () => void;
+  deleteDocument: (docId: string) => void;
 
   draft: ProtocolDraft;
   formErrors: string[];
@@ -60,6 +75,50 @@ export function usePortal(): PortalController {
   const [deploying, setDeploying] = useState(false);
   const [deployMessage, setDeployMessage] = useState<string | null>(null);
   const mounted = useRef(true);
+  const [selectedDocsProtocol, setSelectedDocsProtocol] = useState<string | null>(null);
+  const [documents, setDocuments] = useState<StudyDocument[]>([]);
+  const [noteTitle, setNoteTitle] = useState('');
+  const [noteText, setNoteText] = useState('');
+  const [documentsBusy, setDocumentsBusy] = useState(false);
+  const [documentsError, setDocumentsError] = useState<string | null>(null);
+
+  const documentsProtocol =
+    protocols.find((p) => p.protocol_id === selectedDocsProtocol) ?? protocols.find((p) => p.is_active) ?? null;
+  const docsProtocolId = documentsProtocol?.protocol_id ?? null;
+
+  const loadDocuments = useCallback((protocolId: string | null) => {
+    if (!protocolId) return; // nothing to show; the card asks for a protocol first
+    api
+      .listDocuments(protocolId)
+      .then((d) => mounted.current && setDocuments(d))
+      .catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    loadDocuments(docsProtocolId);
+    // Keep polling so "preparing" turns into "ready for Gem" once Gemini has the file.
+    const timer = setInterval(() => loadDocuments(docsProtocolId), POLL_MS);
+    return () => clearInterval(timer);
+  }, [docsProtocolId, loadDocuments]);
+
+  const runDocumentAction = useCallback(
+    (action: () => Promise<unknown>) => {
+      if (!docsProtocolId) {
+        setDocumentsError('Create and deploy a protocol first.');
+        return;
+      }
+      setDocumentsBusy(true);
+      setDocumentsError(null);
+      action()
+        .then(() => loadDocuments(docsProtocolId))
+        .catch((err: unknown) => {
+          if (!mounted.current) return;
+          setDocumentsError(err instanceof Error ? err.message : 'Something went wrong.');
+        })
+        .finally(() => mounted.current && setDocumentsBusy(false));
+    },
+    [docsProtocolId, loadDocuments],
+  );
 
   const refresh = useCallback(() => {
     Promise.all([api.health(), api.listProtocols(), api.listEvents(), api.listRejections(), api.gatewayMetrics()])
@@ -142,6 +201,38 @@ export function usePortal(): PortalController {
   );
 
   return {
+    documentsProtocol,
+    documents,
+    noteTitle,
+    noteText,
+    documentsBusy,
+    documentsError,
+    setNoteTitle,
+    setNoteText,
+    selectDocumentsProtocol: setSelectedDocsProtocol,
+    addNote: () => {
+      if (!noteTitle.trim() || !noteText.trim()) {
+        setDocumentsError('Give the note a title and some text.');
+        return;
+      }
+      runDocumentAction(async () => {
+        await api.addNote(docsProtocolId!, noteTitle.trim(), noteText.trim());
+        setNoteTitle('');
+        setNoteText('');
+      });
+    },
+    uploadFile: () =>
+      runDocumentAction(async () => {
+        let picked;
+        try {
+          picked = await pickStudyFile();
+        } catch (err) {
+          throw err instanceof PickError ? err : new Error('Could not open that file.');
+        }
+        if (!picked) return; // cancelled
+        await api.addFile(docsProtocolId!, { ...picked, title: picked.filename });
+      }),
+    deleteDocument: (docId: string) => runDocumentAction(() => api.deleteDocument(docsProtocolId!, docId)),
     health,
     connected,
     protocols,

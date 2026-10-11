@@ -122,6 +122,70 @@ export function PortalScreen() {
         ))}
       </Card>
 
+      <Card testID="portal-documents">
+        <AppText variant="title">Gem study context</AppText>
+        <AppText variant="small" tone="muted">
+          Notes, photos and PDFs (manuals, instructions) that Gem reads before answering patients in this study. Gem
+          sessions started while the protocol is active use them.
+        </AppText>
+        {portal.documentsProtocol ? (
+          <>
+            <Row>
+              <AppText testID="portal-documents-protocol">{`For: ${portal.documentsProtocol.title}`}</AppText>
+              {portal.protocols
+                .filter((p) => p.protocol_id !== portal.documentsProtocol?.protocol_id)
+                .map((p) => (
+                  <Button
+                    key={p.protocol_id}
+                    testID={`portal-documents-select-${p.protocol_id}`}
+                    label={`Switch to ${p.title}`}
+                    variant="secondary"
+                    onPress={() => portal.selectDocumentsProtocol(p.protocol_id)}
+                  />
+                ))}
+            </Row>
+            {portal.documents.length === 0 ? (
+              <AppText tone="muted" testID="portal-documents-empty">No study documents yet.</AppText>
+            ) : null}
+            {portal.documents.map((d) => (
+              <Row key={d.doc_id} testID={`portal-document-${d.doc_id}`} style={{ marginVertical: theme.space.xs }}>
+                <AppText>{`${d.kind === 'note' ? '📝' : d.kind === 'pdf' ? '📄' : '🖼️'} ${d.title}`}</AppText>
+                <AppText variant="small" tone="muted">
+                  {`${d.kind.toUpperCase()} · ${Math.max(1, Math.round(d.size_bytes / 1000))} KB · ${
+                    d.kind === 'note' || d.uploaded_to_gemini
+                      ? 'ready for Gem'
+                      : portal.health?.ai_mode === 'gemini'
+                        ? 'uploading to Gemini…'
+                        : 'stored (offline mode)'
+                  }`}
+                </AppText>
+                <Button
+                  testID={`portal-document-delete-${d.doc_id}`}
+                  label="Remove"
+                  variant="secondary"
+                  onPress={() => portal.deleteDocument(d.doc_id)}
+                  disabled={portal.documentsBusy}
+                />
+              </Row>
+            ))}
+            <TextField testID="portal-note-title" label="Note title" value={portal.noteTitle} onChangeText={portal.setNoteTitle}
+              placeholder="About this study" />
+            <TextField testID="portal-note-text" label="Note" value={portal.noteText} onChangeText={portal.setNoteText} multiline
+              placeholder="What the study is about, what data is collected, which device patients use…" />
+            <Row>
+              <Button testID="portal-note-add" label="Add note" onPress={portal.addNote} loading={portal.documentsBusy} />
+              <Button testID="portal-upload-file" label="Upload PDF or image" variant="secondary" onPress={portal.uploadFile}
+                disabled={portal.documentsBusy} />
+            </Row>
+          </>
+        ) : (
+          <AppText tone="muted" testID="portal-documents-no-protocol">Deploy a protocol first, then add study documents to it.</AppText>
+        )}
+        {portal.documentsError ? (
+          <AppText tone="danger" testID="portal-documents-error">{portal.documentsError}</AppText>
+        ) : null}
+      </Card>
+
       <Card testID="portal-gateway-metrics">
         <AppText variant="title">Deterministic gateway</AppText>
         <AppText testID="portal-latency">

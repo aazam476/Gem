@@ -179,3 +179,25 @@ export interface TurnOut {
   frames_used: number;
   latency_ms: number;
 }
+
+// -- Study documents for Gem (docs/API_CONTRACT.md §Study documents) ---------------------
+
+export interface StudyDocument {
+  doc_id: string;
+  protocol_id: string;
+  kind: 'note' | 'image' | 'pdf';
+  title: string;
+  mime_type: string;
+  size_bytes: number;
+  created_at: string;
+  /** Notes only. */
+  text: string | null;
+  uploaded_to_gemini: boolean;
+}
+
+export interface StudyFileUpload {
+  title: string;
+  filename: string;
+  mime_type: string;
+  data_base64: string;
+}
