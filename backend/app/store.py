@@ -81,6 +81,10 @@ CREATE TABLE IF NOT EXISTS context_documents (
     gemini_expires_at TEXT,
     created_at        TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS app_settings (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
 CREATE INDEX IF NOT EXISTS idx_docs_protocol ON context_documents(protocol_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_events_protocol ON clinical_events(protocol_id, timestamp);
 """
@@ -364,6 +368,21 @@ class Store:
             d["errors"] = json.loads(d["errors"])
             out.append(d)
         return out
+
+    # -- settings editable from the portal -----------------------------------------
+
+    def get_setting(self, key: str) -> str | None:
+        with self._lock:
+            row = self._conn.execute("SELECT value FROM app_settings WHERE key = ?", (key,)).fetchone()
+        return row["value"] if row else None
+
+    def set_setting(self, key: str, value: str) -> None:
+        with self._lock:
+            self._conn.execute(
+                "INSERT INTO app_settings (key, value) VALUES (?, ?)"
+                " ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                (key, value),
+            )
 
     # -- researcher context documents ---------------------------------------------
 

@@ -23,6 +23,7 @@ from ..schemas import ID_PATTERN
 from ..voice import ElevenLabsVoice, VoiceError
 from .brain import Brain, BrainError, Prompt, PromptFrame, build_system_prompt
 from .documents import DocumentLibrary
+from .settings import SettingsService
 from .echo import is_echo
 from .render import render
 from .sessions import Session, SessionExpired, SessionNotFound, SessionStore, Turn
@@ -55,6 +56,8 @@ class SessionOut(BaseModel):
     turns: int
     study_context: bool
     study_documents: int = Field(description="Researcher documents Gem reads with every question")
+    idle_after_s: int = Field(description="App pauses frames after this much inactivity (portal setting)")
+    purge_after_s: int = Field(description="App ends the session after this much inactivity (portal setting)")
 
 
 class FrameIn(BaseModel):
@@ -119,6 +122,7 @@ def build_router(
     voice: ElevenLabsVoice | None,
     study_context: Callable[[], tuple[str | None, str | None]],
     library: DocumentLibrary | None = None,
+    assistant_settings: SettingsService | None = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/sessions", tags=["assistant"])
 
@@ -143,6 +147,8 @@ def build_router(
             study_context=bool(s.study_context),
             study_documents=len(library.store.list_documents(s.study_protocol_id))
             if library is not None and s.study_protocol_id else 0,
+            idle_after_s=assistant_settings.current.idle_after_s if assistant_settings else 60,
+            purge_after_s=assistant_settings.current.purge_after_s if assistant_settings else int(store.idle_timeout_s),
         )
 
     @router.post("", status_code=201, response_model=SessionOut)

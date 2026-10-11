@@ -25,6 +25,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 from .assistant.brain import Brain, make_brain
 from .assistant.documents import DocumentLibrary, GeminiFiles, build_documents_router
+from .assistant.settings import AssistantSettings, SettingsService, build_settings_router
 from .assistant.routes import build_router, sweep_forever
 from .assistant.sessions import SessionStore
 from .config import Settings, load_settings
@@ -109,6 +110,10 @@ def create_app(
         keepalive_s=settings.frame_keepalive_s,
     )
     brain_client = brain or make_brain(settings)
+    assistant_settings = SettingsService(
+        store, sessions,
+        AssistantSettings(idle_after_s=60, purge_after_s=int(settings.session_idle_timeout_s)),
+    )
 
     library = DocumentLibrary(settings, store, gemini_files or GeminiFiles(settings, store))
 
@@ -136,7 +141,7 @@ def create_app(
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
-        allow_methods=["GET", "POST", "DELETE"],
+        allow_methods=["GET", "POST", "PUT", "DELETE"],
         allow_headers=["Content-Type", "X-Gateway-Token"],
     )
 
@@ -380,7 +385,10 @@ def create_app(
                                  headers={"Cache-Control": "no-store"})
 
     app.state.documents = library
-    app.include_router(build_router(settings, sessions, brain_client, voice_client, study_context, library))
+    app.state.assistant_settings = assistant_settings
+    app.include_router(build_router(settings, sessions, brain_client, voice_client, study_context, library,
+                                    assistant_settings))
+    app.include_router(build_settings_router(assistant_settings))
     app.include_router(build_documents_router(store, library))
     return app
 
