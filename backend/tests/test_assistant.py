@@ -290,6 +290,7 @@ def test_speech_is_synthesized_once_then_served_from_ram(tmp_path) -> None:
     again = c.get(turn["audio_url"])
     assert first.status_code == again.status_code == 200
     assert first.content == again.content and first.content.startswith(b"ID3")
+    assert first.headers["content-length"] == str(len(first.content))  # whole file, not chunked
     assert first.headers["x-gem-audio-cache"] == "miss" and again.headers["x-gem-audio-cache"] == "hit"
     assert len(calls) == 1
 

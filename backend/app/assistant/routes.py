@@ -9,12 +9,12 @@ import contextlib
 import logging
 import time
 import uuid
-from collections.abc import AsyncIterator, Callable
+from collections.abc import Callable
 from typing import Any, Literal
 
 from fastapi import APIRouter, FastAPI, Response
 from fastapi.encoders import jsonable_encoder
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from ..config import Settings
@@ -271,46 +271,35 @@ def build_router(
 
     @router.get("/{session_id}/turns/{turn_id}/speech")
     async def turn_speech(session_id: str, turn_id: str) -> Any:
-        """ElevenLabs audio for an answer. Synthesized at most once per turn: the first
-        request streams it through while caching it in RAM; later requests (replays)
-        are served from the cache with no ElevenLabs call."""
+        """ElevenLabs MP3 for an answer, synthesized at most once per turn and kept in RAM.
+
+        Returned whole with a Content-Length (not chunked): iOS's player is unreliable with
+        length-less streams, and the phone downloads the file before playing it anyway.
+        Concurrent first requests wait for the same synthesis."""
         if voice is None:
             return _error(404, "voice_disabled", "ElevenLabs is not configured; use on-device speech.")
         turn = load_turn(session_id, turn_id)
         if isinstance(turn, JSONResponse):
             return turn
-        if turn.audio is None and turn.audio_ready is not None:
-            with contextlib.suppress(TimeoutError):
-                await asyncio.wait_for(turn.audio_ready.wait(), timeout=30)
-        if turn.audio is not None:
-            return Response(turn.audio, media_type="audio/mpeg", headers={"X-Gem-Audio-Cache": "hit"})
-
-        turn.audio_ready = asyncio.Event()
-        try:
-            stream = await voice.open_stream(turn.answer)
-        except VoiceError as exc:
-            turn.audio_ready.set()
-            turn.audio_ready = None
-            log.warning("voice failed for turn %s: %s", turn_id, exc)
-            return _error(502, "voice_unavailable", "Speech synthesis failed.")
-
-        async def tee() -> AsyncIterator[bytes]:
-            chunks: list[bytes] = []
-            complete = False
-            try:
-                async for chunk in stream:
-                    chunks.append(chunk)
-                    yield chunk
-                complete = True
-            finally:
-                if complete:
-                    turn.audio = b"".join(chunks)
-                if turn.audio_ready is not None:
+        cache = "hit"
+        if turn.audio is None:
+            if turn.audio_ready is not None:  # another request is synthesizing it right now
+                with contextlib.suppress(TimeoutError):
+                    await asyncio.wait_for(turn.audio_ready.wait(), timeout=30)
+            if turn.audio is None:
+                cache = "miss"
+                turn.audio_ready = asyncio.Event()
+                try:
+                    turn.audio = await voice.synthesize(turn.answer)
+                    log.info("voice: %d bytes of ElevenLabs audio for turn %s", len(turn.audio), turn_id)
+                except VoiceError as exc:
+                    log.warning("voice failed for turn %s: %s", turn_id, exc)
+                    return _error(502, "voice_unavailable", "Speech synthesis failed.")
+                finally:
                     turn.audio_ready.set()
                     turn.audio_ready = None
-
-        return StreamingResponse(tee(), media_type="audio/mpeg",
-                                 headers={"Cache-Control": "no-store", "X-Gem-Audio-Cache": "miss"})
+        return Response(turn.audio, media_type="audio/mpeg",
+                        headers={"X-Gem-Audio-Cache": cache, "Cache-Control": "private, max-age=600"})
 
     return router
 

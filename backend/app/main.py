@@ -379,4 +379,7 @@ def create_app(
 def get_app() -> FastAPI:
     """Uvicorn factory: ``uvicorn app.main:get_app --factory``."""
     logging.basicConfig(level=logging.INFO)
+    # httpx logs every outbound request at INFO ("HTTP Request: POST ... 200 OK"); Gem logs
+    # its own one-line summaries instead.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
     return create_app()
