@@ -68,7 +68,7 @@ Copy must say that **both** camera and microphone are required, and show each on
 ## Assistant — `AssistantScreen` (native; web preview at `?patient`)
 
 Hook: `useAssistant()` →
-`{state, attachCamera, onCameraReady, micActive, micError, frames, dismiss, replay, retry}`.
+`{state, attachCamera, onCameraReady, micActive, micError, frames, activity, dismiss, replay, retry}`.
 Destructure it (the React Compiler lint flags member access on an object that carries a ref).
 
 Always present: `assistant-screen` (root), `assistant-camera` (full-screen `CameraView` with
@@ -83,6 +83,7 @@ Always present: `assistant-screen` (root), `assistant-camera` (full-screen `Came
 | `state.lastTranscript` | `assistant-heard` | "You said: …" | |
 | `state.notice` | `assistant-notice` | e.g. "I didn't catch that." | |
 | `phase === 'thinking'` | `assistant-thinking` | progress indicator | |
+| `activity !== 'active'` (and no answer shown) | `assistant-idle` | "Paused" (idle, 1 min) / "Gem is asleep" (expired, 10 min) + "Move your phone or speak to wake Gem" | none — movement or speech wakes it |
 | `phase === 'error'` | `assistant-error`, `assistant-retry` | `state.error` | `retry` |
 | `state.answer` older frame | `assistant-answer-age` (only when `frameAgeLabel(answer.frameAgeS)` is non-null) | "Seen 58 seconds ago" — the photo is NOT the current view | |
 | `state.answer` | `assistant-answer` (full-screen overlay), `assistant-answer-listening` ("Still listening — you can interrupt or ask a follow-up" / "Hearing you…" / "Thinking…" by `state.phase`), `assistant-answer-image` (only if `imageUri`), `assistant-answer-box` (scrollable text box), `assistant-answer-text`, `assistant-replay`, `assistant-dismiss` | `answer.imageUri` (show with `resizeMode="contain"` — the drawing is baked into the image), `answer.answer` | `replay`, `dismiss` |
@@ -106,6 +107,7 @@ Hook: `usePortal()` → see `PortalController` in `src/hooks/usePortal.ts`.
 | Metric row *i* | `portal-metric-{i}`, `portal-metric-{i}-name`, `-label`, `-unit`, `-hard_min`, `-min`, `-max`, `-hard_max`, `-required`, `-remove` | `draft.rules.metrics[i]` | `updateMetric(i, field, value)`, `removeMetric(i)` |
 | Form feedback | `portal-form-errors` (when `formErrors.length`), `portal-deploy-message` (when set) | | |
 | Protocols | `portal-protocols`, `portal-protocol-{id}`, `portal-activate-{id}` / `portal-deactivate-{id}`, `portal-protocols-empty` | `protocols` | `activate(id)`, `deactivate(id)` |
+| Study documents | `portal-documents`, `portal-documents-protocol`, `portal-documents-select-{id}` (other protocols), `portal-document-{doc_id}`, `portal-document-delete-{doc_id}`, `portal-documents-empty`, `portal-note-title`, `portal-note-text`, `portal-note-add`, `portal-upload-file`, `portal-documents-error`, `portal-documents-no-protocol` | `documentsProtocol`, `documents[]` (kind, title, size, `uploaded_to_gemini`), `noteTitle`, `noteText`, `documentsBusy`, `documentsError` | `setNoteTitle`, `setNoteText`, `addNote`, `uploadFile` (opens the file picker), `deleteDocument(id)`, `selectDocumentsProtocol(id)` |
 | Gateway | `portal-gateway-metrics`, `portal-latency` | `metrics.validation.{p50_us,p95_us,p99_us,count}`, `metrics.events_stored`, `rejections.length` | — |
 | Readings | `portal-events`, `portal-event-{event_id}`, `portal-events-empty` | `events[]` (status, readings, time, patient, `validation_ns`) | — |
 | Blocked | `portal-rejections`, `portal-rejection-{rejection_id}`, `portal-rejections-empty` | `rejections[]` (errors, readings, time) | — |

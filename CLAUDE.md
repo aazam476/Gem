@@ -39,7 +39,8 @@ npx expo start            # press w for portal, scan QR in Expo Go for the Gem a
 ## Hard rules
 - **No secrets in `mobile/`.** Anything `EXPO_PUBLIC_*` ships to phones. Keys live only in `backend/.env` (gitignored).
 - **No live API calls in tests.** Backend tests block outbound sockets; use `ScriptedVision`/`httpx.MockTransport`. Live checks go in `tests/test_live.py` behind `GEM_LIVE_TESTS=1`.
-- **Gem's context is RAM-only.** Frames, transcripts, drawn images and audio live in `SessionStore` and are purged after 10 idle minutes. Don't persist them without an explicit decision.
+- **Gem's context is RAM-only.** Frames, transcripts, drawn images and audio live in `SessionStore` and are purged after 10 idle minutes (the app also ends the session after 10 min of inactivity, `useActivity`). Don't persist them without an explicit decision. Researcher study documents (`assistant/documents.py`, `backend/uploads/`) are the exception: they're research material and are persisted.
+- **Prompt order is documents → frames → history → question** (stable prefix for Gemini's implicit caching). Keep new context in that order.
 - **The mic stream is started once and never stopped** while the app is open (a stopped `AudioStream` may not restart). Mute by ignoring buffers (`isMicMuted`: only while thinking). While Gem speaks the VAD is in barge-in/echo mode; keep the server echo check (`assistant/echo.py`).
 - **No frames while the answer screen is up** (`shouldStreamFrames`); they resume on Dismiss.
 - **Gemini never draws pixels.** It returns boxes; `app/assistant/render.py` draws them. Parse its JSON strictly (`brain.parse_reply`).
@@ -59,7 +60,7 @@ npx expo start            # press w for portal, scan QR in Expo Go for the Gem a
 Run `cd mobile && npm run typecheck && npm run lint && npm test`. Failing contract tests name the testID/handler/state that was dropped; reconnect it to the hook without changing the hook's API. See `docs/UI_CONTRACT.md`.
 
 ## Map
-- `backend/app/assistant/` — `sessions.py` (context window + idle purge), `brain.py` (Gem prompt, schema, Gemini/mock), `render.py` (draw boxes), `routes.py` (`/sessions/...`)
+- `backend/app/assistant/` — `sessions.py` (context window + idle purge), `brain.py` (Gem prompt, schema, Gemini/mock), `render.py` (draw boxes), `routes.py` (`/sessions/...`), `documents.py` (study documents + Gemini Files), `echo.py`
 - `backend/app/` — `main.py` (app + portal/gateway routes), `gateway.py` (pure validation), `ingest.py`, `store.py` (SQLite + rule cache), `vision.py` (legacy reader), `voice.py` (ElevenLabs), `imaging.py`, `rules.py`, `voice_lines.py`
-- `mobile/src/` — `hooks/useAssistant.ts` (orchestration), `useSpeechCapture.ts`, `useFrameStreamer.ts`, `usePermissions.ts`, `usePortal.ts`; `logic/` (`vad`, `pcm`, `wav`, `assistantState`, `rulesForm`); `services/` (`answerAudio`, `image`, `lines`); `screens/assistant/`, `screens/portal/`; `ui/`; `__tests__/`
-- `docs/` — ASSISTANT_SPEC, SPEC, API_CONTRACT, UI_CONTRACT, TASKS (phases 9–10 planned), DECISIONS, HUMAN_TESTS, PERFORMANCE, PITCH (pitch only)
+- `mobile/src/` — `hooks/useAssistant.ts` (orchestration), `useSpeechCapture.ts`, `useFrameStreamer.ts`, `useActivity.ts`, `usePermissions.ts`, `usePortal.ts`; `logic/` (`vad`, `pcm`, `wav`, `bargeIn`, `activity`, `assistantState`, `rulesForm`); `services/` (`answerAudio`, `audioMode`, `image`, `lines`, `pickFile`); `screens/assistant/`, `screens/portal/`; `ui/`; `__tests__/`
+- `docs/` — ASSISTANT_SPEC, SPEC, API_CONTRACT, UI_CONTRACT, TASKS, DECISIONS, HUMAN_TESTS, PERFORMANCE, PITCH (pitch only)

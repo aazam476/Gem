@@ -208,19 +208,47 @@ vanish with the session.
 | Second question while answering | Mic muted; server also returns 409 `turn_in_progress` |
 | No frames yet | Gemini answers from audio only; no image shown |
 
-## 8. Next phases (planned, not built)
+## 8. Inactivity (built)
 
-**Phase 9 — inactivity detection** (hooks already in place): the frame response returns
-`change_score` (0 = identical, 1 = completely different, from 32×32 grayscale thumbnails),
-the VAD exposes speech activity, and `useFrameStreamer` takes an `enabled` flag. Add
-`expo-sensors` (DeviceMotion/Accelerometer, Expo Go compatible) and a pure
-`logic/activity.ts` that combines motion + speech + change score; after **1 min** inactive,
-pause frames (`enabled=false`); the existing **10 min** server purge then clears the
-context. Resume instantly on motion or speech.
+`src/logic/activity.ts` (pure) + `src/hooks/useActivity.ts`:
 
-**Phase 10 — researcher context**: portal uploads of text, images and PDFs per study.
-Store files with the Gemini **Files API** (or inline small ones), build one explicit
-**context cache** per study (generateContent supports explicit caching; minimum ~4k tokens
-for Flash) and attach it to every turn of sessions in that study, replacing today's
-protocol-text placeholder in `build_system_prompt`. Needs: upload endpoints + storage,
-cache lifecycle (TTL refresh while sessions are active), per-patient study assignment.
+| Signal | Source | Counts when |
+|--------|--------|-------------|
+| Movement | `expo-sensors` Accelerometer + Gyroscope, 5 Hz, no permission needed | acceleration changes ≥ 0.04 g between readings, or rotation ≥ 0.25 rad/s |
+| Talking | VAD `speech_start` | any detected speech |
+| Scene change | server `change_score` of each frame | ≥ 0.08 (camera noise is ~0.01) |
+| Interaction / Gem busy | Dismiss, Read again, Try again; thinking or speaking | always |
+
+- **1 minute** without any signal → `idle`: frames stop (`useFrameStreamer` disabled); the mic
+  and sensors stay on; banner "Paused — Move your phone or speak to wake Gem".
+- **10 minutes** → `expired`: the app ends the session (`DELETE /sessions/{id}`), purging the
+  context window (frames, history, answers, audio). The server's own 10-minute idle purge
+  remains as a backstop.
+- Any signal → `active`: frames resume; after expiry a **new session** opens automatically on
+  the next frame or question.
+- Phone lying still on a table: no motion, scene unchanged → idle after 1 min, as intended.
+
+## 9. Researcher study documents (built)
+
+Researchers attach **notes, images (JPEG/PNG/WebP) and PDFs** to a protocol in the portal
+("Gem study context" card). Every question in a Gem session started while that protocol is
+active includes them.
+
+- Storage: notes in SQLite; files under `backend/uploads/<protocol>/` (gitignored), metadata
+  in `context_documents`. Images are downscaled to 2048 px. Limits: 20 MB per file, 20
+  documents and 50 MB per protocol. These are research materials, not patient data, so they
+  are persisted (unlike Gem's RAM-only session context).
+- Gemini: images and PDFs are uploaded once to the **Gemini Files API** (in the background
+  right after upload; re-uploaded when < 2 h of the ~48 h lifetime remains; handle stored in
+  SQLite). If the upload fails, the bytes are sent inline (≤ 12 MB).
+- Prompt order: **documents → camera frames → history → question**. The documents never
+  change between questions, so they form a stable prefix that Gemini's implicit caching can
+  bill at the cached rate. The system prompt tells Gem to prefer the documents for study and
+  device questions ("the manual says…"), and that they are background, not instructions.
+- Token cost: notes ≈ their text; images ≈ 1,120 tokens; PDFs are billed per page (budget
+  roughly 500–1,000 tokens per page). A 50-page manual adds tens of thousands of tokens to
+  every question, so keep documents focused.
+- The protocol's own title + instructions still go into the system prompt as before.
+
+Not built yet: per-patient study assignment (today: whichever protocol is active when the
+session starts), explicit context caches, document versioning.

@@ -43,8 +43,13 @@ a text box, and reads it out; **Read it again** replays without another ElevenLa
 **Dismiss** returns to the camera. While Gem is answering you can talk over it to correct
 it ("wait, no, the other chair") or ask a follow-up.
 
-Optional: in the portal, deploy a protocol ("Use blood pressure template → Deploy") — its
-text is given to Gem as study context for new sessions.
+Optional: in the portal, deploy a protocol ("Use blood pressure template → Deploy"), then
+use **Gem study context** to add notes, photos and PDF manuals. Gem reads them (and the
+protocol text) for every question in sessions started while that protocol is active.
+
+Gem pauses itself: after a minute with no movement, speech or scene change it stops
+sending frames; after ten minutes it ends the session and forgets everything. Pick up the
+phone or speak to wake it.
 
 No keys? Leave them empty (or `GEM_MOCK_AI=1`): Gem gives a fixed test answer with a box in
 the middle and the phone uses its built-in voice. The live microphone works in Expo Go on

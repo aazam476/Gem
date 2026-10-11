@@ -35,7 +35,7 @@ cd mobile && npx expo start          # w = portal in browser; scan QR in Expo Go
 
 | # | Steps | Expected |
 |---|-------|----------|
-| 1.1 | `cd backend && GEM_LIVE_TESTS=1 .venv/bin/pytest tests/test_live.py -s` | 4 passed (incl. recalling a monitor seen 60 s earlier). Gemini reads the synthetic BP fixture (128/82) and the assistant test answers mentioning 128 with at least one box. "Model not found" → fix `GEMINI_MODEL` / `GEMINI_ASSISTANT_MODEL`. |
+| 1.1 | `cd backend && GEM_LIVE_TESTS=1 .venv/bin/pytest tests/test_live.py -s` | 5 passed (incl. recalling a monitor seen 60 s earlier, and answering from an uploaded PDF manual). Gemini reads the synthetic BP fixture (128/82) and the assistant test answers mentioning 128 with at least one box. "Model not found" → fix `GEMINI_MODEL` / `GEMINI_ASSISTANT_MODEL`. |
 | 1.2 | `curl localhost:8000/health` | `"ai_mode":"gemini"`, `"voice_enabled":true` |
 
 ## 2. Gem assistant on a phone (Expo Go)
@@ -62,6 +62,26 @@ cd mobile && npx expo start          # w = portal in browser; scan QR in Expo Go
 | 2.11 | Quiet room vs. noisy room (fan, kitchen). Ask a question in each. | End of speech is detected in both; no endless "Hearing you…". If it triggers on noise or cuts you off, note the room and phone model (tune `src/logic/vad.ts` thresholds). |
 | 2.13 | iPhone ringer switch on silent; ask a question. | Voice still audible through the speaker (not the earpiece). |
 | 2.14 | Background the app for a few seconds, come back, ask again. | Frames and mic resume; answer works. |
+
+## 2b. Inactivity
+
+| # | Steps | Expected |
+|---|-------|----------|
+| 2b.1 | Put the phone face-up on a table, camera at a still scene, stay quiet for 70 s. | After ~60 s: "Paused — Move your phone or speak to wake Gem"; "Frames sent" stops increasing. |
+| 2b.2 | Pick the phone up. | Banner disappears within a second; frames resume. |
+| 2b.3 | Leave it paused, then just speak a question. | It wakes and answers. |
+| 2b.4 | Hold the phone still but wave your hand in front of the camera (before 60 s pass). | Stays active (scene change counts). |
+| 2b.5 | Leave it still for 10+ minutes, then pick it up and ask "What did you see before?" | Banner said "Gem is asleep"; after waking, Gem has no memory of earlier frames (new session); backend log shows the old session ended. |
+
+## 2c. Study documents (portal + phone)
+
+| # | Steps | Expected |
+|---|-------|----------|
+| 2c.1 | Portal → "Gem study context": add a note ("Patients use an Omron M7 on the left arm; rest 5 minutes first"), upload the device's PDF manual and a photo of the device. | All three listed; PDF/photo show "uploading to Gemini…" then "ready for Gem" within a few seconds (with a Gemini key). |
+| 2c.2 | Restart the Gem app (new session), ask "How long should I rest before measuring?" | Answer uses the note/manual ("rest five minutes…"). |
+| 2c.3 | Point at the device and ask "Which button do I press first?" | Answer matches the manual; the button is boxed. Note latency vs. without documents. |
+| 2c.4 | Remove the note in the portal, start a new session, ask again. | Gem no longer cites it. |
+| 2c.5 | Try uploading a .docx and a 30 MB PDF. | Clear error messages; nothing added. |
 
 ## 3. Failure behavior on a phone
 

@@ -952,6 +952,251 @@
           }
         }
       }
+    },
+    "/protocols/{protocol_id}/documents": {
+      "get": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "List Documents",
+        "operationId": "list_documents_protocols__protocol_id__documents_get",
+        "parameters": [
+          {
+            "name": "protocol_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Protocol Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DocumentOut"
+                  },
+                  "title": "Response List Documents Protocols  Protocol Id  Documents Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/protocols/{protocol_id}/documents/notes": {
+      "post": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Add Note",
+        "operationId": "add_note_protocols__protocol_id__documents_notes_post",
+        "parameters": [
+          {
+            "name": "protocol_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Protocol Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NoteIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/protocols/{protocol_id}/documents/files": {
+      "post": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Add File",
+        "operationId": "add_file_protocols__protocol_id__documents_files_post",
+        "parameters": [
+          {
+            "name": "protocol_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Protocol Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FileIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/protocols/{protocol_id}/documents/{doc_id}/content": {
+      "get": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Content",
+        "operationId": "content_protocols__protocol_id__documents__doc_id__content_get",
+        "parameters": [
+          {
+            "name": "protocol_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Protocol Id"
+            }
+          },
+          {
+            "name": "doc_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Content Protocols  Protocol Id  Documents  Doc Id  Content Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/protocols/{protocol_id}/documents/{doc_id}": {
+      "delete": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Delete",
+        "operationId": "delete_protocols__protocol_id__documents__doc_id__delete",
+        "parameters": [
+          {
+            "name": "protocol_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Protocol Id"
+            }
+          },
+          {
+            "name": "doc_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1188,6 +1433,71 @@
         ],
         "title": "CrossFieldRule"
       },
+      "DocumentOut": {
+        "properties": {
+          "doc_id": {
+            "type": "string",
+            "title": "Doc Id"
+          },
+          "protocol_id": {
+            "type": "string",
+            "title": "Protocol Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "note",
+              "image",
+              "pdf"
+            ],
+            "title": "Kind"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "mime_type": {
+            "type": "string",
+            "title": "Mime Type"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "title": "Size Bytes"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text",
+            "description": "Notes only"
+          },
+          "uploaded_to_gemini": {
+            "type": "boolean",
+            "title": "Uploaded To Gemini"
+          }
+        },
+        "type": "object",
+        "required": [
+          "doc_id",
+          "protocol_id",
+          "kind",
+          "title",
+          "mime_type",
+          "size_bytes",
+          "created_at",
+          "uploaded_to_gemini"
+        ],
+        "title": "DocumentOut"
+      },
       "EventOut": {
         "properties": {
           "event_id": {
@@ -1267,6 +1577,42 @@
           "timestamp"
         ],
         "title": "EventOut"
+      },
+      "FileIn": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 120,
+            "title": "Title",
+            "default": ""
+          },
+          "filename": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Filename"
+          },
+          "mime_type": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Mime Type"
+          },
+          "data_base64": {
+            "type": "string",
+            "maxLength": 28000000,
+            "minLength": 1,
+            "title": "Data Base64"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "filename",
+          "mime_type",
+          "data_base64"
+        ],
+        "title": "FileIn"
       },
       "FrameIn": {
         "properties": {
@@ -1549,6 +1895,29 @@
         ],
         "title": "MetricRule"
       },
+      "NoteIn": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 20000,
+            "minLength": 1,
+            "title": "Text"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "title",
+          "text"
+        ],
+        "title": "NoteIn"
+      },
       "ProtocolCreate": {
         "properties": {
           "title": {
@@ -1668,6 +2037,11 @@
           "study_context": {
             "type": "boolean",
             "title": "Study Context"
+          },
+          "study_documents": {
+            "type": "integer",
+            "title": "Study Documents",
+            "description": "Researcher documents Gem reads with every question"
           }
         },
         "type": "object",
@@ -1680,7 +2054,8 @@
           "frames_buffered",
           "frames_received",
           "turns",
-          "study_context"
+          "study_context",
+          "study_documents"
         ],
         "title": "SessionOut"
       },

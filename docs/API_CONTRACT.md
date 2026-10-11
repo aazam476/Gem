@@ -150,7 +150,7 @@ a prompt. Spec: [ASSISTANT_SPEC.md](ASSISTANT_SPEC.md).
 Body optional: `{"patient_id": "patient-demo-001"}`.
 ```json
 {"session_id": "uuid", "idle_timeout_s": 600, "memory_s": 300, "expires_in_s": 600, "frame_interval_ms": 1000,
- "frames_buffered": 0, "frames_received": 0, "turns": 0, "study_context": true}
+ "frames_buffered": 0, "frames_received": 0, "turns": 0, "study_context": true, "study_documents": 2}
 ```
 `study_context` is true when a protocol was active at creation (its text is given to Gemini).
 
@@ -200,3 +200,23 @@ chunked — iOS's player is unreliable with length-less streams; the app downloa
 and plays it locally). First request synthesizes and caches it (`X-Gem-Audio-Cache: miss`);
 later requests return the cached bytes (`hit`) — ElevenLabs is billed once per answer.
 Concurrent first requests wait for the same synthesis.
+
+## Study documents
+
+Researcher material Gem reads with every question of sessions started while the protocol is
+active. Spec: [ASSISTANT_SPEC.md §9](ASSISTANT_SPEC.md).
+
+`Document`:
+```json
+{"doc_id": "uuid", "protocol_id": "uuid", "kind": "note" | "image" | "pdf", "title": "Omron manual",
+ "mime_type": "application/pdf", "size_bytes": 2400000, "created_at": "…",
+ "text": "notes only, else null", "uploaded_to_gemini": true}
+```
+
+| Method & path | Body | Success | Errors |
+|---------------|------|---------|--------|
+| `GET /protocols/{id}/documents` | — | 200 `Document[]` (oldest first) | 404 `protocol_not_found` |
+| `POST /protocols/{id}/documents/notes` | `{title (≤120), text (≤20,000)}` | 201 `Document` | 404, 422 `bad_document` (limits) |
+| `POST /protocols/{id}/documents/files` | `{title?, filename, mime_type, data_base64}` — `application/pdf`, `image/jpeg`, `image/png`, `image/webp`; ≤ 20 MB decoded | 201 `Document` (Gemini upload starts in the background) | 404, 422 `bad_document` (type, content doesn't match type, size, ≤ 20 docs / 50 MB per protocol) |
+| `GET /protocols/{id}/documents/{doc_id}/content` | — | 200 the file (or note text) | 404 `document_not_found` |
+| `DELETE /protocols/{id}/documents/{doc_id}` | — | 204 (also deletes the Gemini copy) | 404 `document_not_found` |

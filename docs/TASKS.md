@@ -64,19 +64,23 @@ needs a human (see HUMAN_TESTS.md).
 - [ ] 👤 Phone run: HUMAN_TESTS §2–§4 (mic + VAD + ElevenLabs + real Gemini are untested by the agent)
 - **Check:** `./scripts/check.sh`
 
-## Phase 9 — Inactivity detection (next)
-- [ ] `npx expo install expo-sensors`; `hooks/useMotion.ts` (DeviceMotion magnitude, 5 Hz)
-- [ ] Pure `logic/activity.ts`: inactive when no speech, motion below threshold, and frame `change_score` below threshold for 60 s; unit tests with synthetic timelines
-- [ ] Pause frames (`useFrameStreamer(enabled=false)`) after 1 min inactive; resume on motion/speech/scene change; UI "Paused — move or speak to wake Gem"
-- [ ] Server purge already handles the 10-min context drop; add a client-side purge (DELETE) at 10 min for privacy
-- [ ] HUMAN_TESTS for phone-on-table / phone-in-pocket / talking-while-still
+## Phase 9 — Inactivity detection ✅ built
+- [x] `expo-sensors` accelerometer + gyroscope; pure `logic/activity.ts` with timeline tests
+- [x] Frames paused after 1 min without movement/speech/scene change/taps; session ended (context purged) after 10 min; wake on any signal, new session lazily
+- [x] "Paused" / "Gem is asleep" banner (`assistant-idle`)
+- [ ] 👤 HUMAN_TESTS §2b (sensor thresholds on a real phone)
+- **Check:** `cd mobile && npm test`
 
-## Phase 10 — Researcher context uploads (next)
-- [ ] Data model: studies, documents (text, image, PDF), patient → study assignment
-- [ ] Portal: upload/list/delete documents, write study notes
-- [ ] Backend: Gemini Files API upload; explicit context cache per study (TTL refreshed while sessions are active); attach to turns; replace `study_context()` placeholder
-- [ ] Prompt: cite which document an answer came from when relevant
-- [ ] Tests with mocked Files/caches APIs; live test behind `GEM_LIVE_TESTS`
+## Phase 10 — Researcher study documents ✅ built
+- [x] Backend: notes/images/PDFs per protocol, validation + limits, `backend/uploads`, Gemini Files API upload (background, re-upload near expiry, inline fallback), documents-first prompt
+- [x] Portal: "Gem study context" card (notes, file picker upload, remove, readiness)
+- [x] Tests: backend 17 new (CRUD, limits, Files API fake, prompt order), portal hook + contract tests; web run uploading a real PDF
+- [ ] 👤 HUMAN_TESTS §2c and live test 1.1 (real Gemini reading a PDF)
+- **Check:** `./scripts/check.sh`
+
+## Next (not started)
+- Per-patient study assignment (instead of "active protocol when the session starts")
+- Revisit barge-in (iOS recorder-based detection; see DECISIONS 45–46)
 
 ## Backlog (not started)
 - Decide whether to delete the legacy capture/gateway endpoints or expose the gateway as a Gem tool
