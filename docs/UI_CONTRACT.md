@@ -17,7 +17,7 @@ screenshots: [`screenshots/`](screenshots/).
   Both must keep working (`npx expo start`, then `w` for web; Expo Go for native).
   On web you can preview the Gem assistant at `http://localhost:8081/?patient`.
 - Live microphone streaming (`expo-audio` AudioStream) is **native only**; the web preview
-  (`?patient`) shows the mic error and works with typed questions.
+  (`?patient`) shows the mic error; questions can only be asked on the phone.
 
 ## Where to restyle
 
@@ -68,12 +68,12 @@ Copy must say that **both** camera and microphone are required, and show each on
 ## Assistant — `AssistantScreen` (native; web preview at `?patient`)
 
 Hook: `useAssistant()` →
-`{state, attachCamera, onCameraReady, micActive, micError, frames, dismiss, replay, retry, sendText}`.
+`{state, attachCamera, onCameraReady, micActive, micError, frames, dismiss, replay, retry}`.
 Destructure it (the React Compiler lint flags member access on an object that carries a ref).
 
 Always present: `assistant-screen` (root), `assistant-camera` (full-screen `CameraView` with
 `ref={attachCamera}`, `onCameraReady={onCameraReady}`, `facing="back"`), `assistant-status`,
-`assistant-mic`, `assistant-frames`, `assistant-text-input`, `assistant-send`.
+`assistant-mic`, `assistant-frames`. There is no typed-question input (removed on request).
 
 | Condition | Required testIDs | Data | Actions |
 |-----------|------------------|------|---------|
@@ -84,12 +84,14 @@ Always present: `assistant-screen` (root), `assistant-camera` (full-screen `Came
 | `state.notice` | `assistant-notice` | e.g. "I didn't catch that." | |
 | `phase === 'thinking'` | `assistant-thinking` | progress indicator | |
 | `phase === 'error'` | `assistant-error`, `assistant-retry` | `state.error` | `retry` |
-| typed question | `assistant-text-input`, `assistant-send` | | `sendText(text)` then clear; send disabled while empty/thinking/starting |
 | `state.answer` older frame | `assistant-answer-age` (only when `frameAgeLabel(answer.frameAgeS)` is non-null) | "Seen 58 seconds ago" — the photo is NOT the current view | |
-| `state.answer` | `assistant-answer` (full-screen overlay), `assistant-answer-image` (only if `imageUri`), `assistant-answer-box` (scrollable text box), `assistant-answer-text`, `assistant-replay`, `assistant-dismiss` | `answer.imageUri` (show with `resizeMode="contain"` — the drawing is baked into the image), `answer.answer` | `replay`, `dismiss` |
+| `state.answer` | `assistant-answer` (full-screen overlay), `assistant-answer-listening` ("Still listening — you can interrupt or ask a follow-up" / "Hearing you…" / "Thinking…" by `state.phase`), `assistant-answer-image` (only if `imageUri`), `assistant-answer-box` (scrollable text box), `assistant-answer-text`, `assistant-replay`, `assistant-dismiss` | `answer.imageUri` (show with `resizeMode="contain"` — the drawing is baked into the image), `answer.answer` | `replay`, `dismiss` |
 
 Constraints specific to this screen:
-- The camera must stay mounted under the answer overlay (frames keep flowing).
+- The camera must stay mounted under the answer overlay. Frames are paused while the overlay
+  is up (the hook handles it) and resume after Dismiss.
+- The mic stays live on the answer overlay: the user can talk over Gem to interrupt. Keep the
+  "still listening" hint visible there.
 - Don't play other sounds: the mic is open; Gem's own voice is handled by the hook.
 - The answer image already contains the markings; don't draw boxes in the UI.
 

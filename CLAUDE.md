@@ -40,7 +40,8 @@ npx expo start            # press w for portal, scan QR in Expo Go for the Gem a
 - **No secrets in `mobile/`.** Anything `EXPO_PUBLIC_*` ships to phones. Keys live only in `backend/.env` (gitignored).
 - **No live API calls in tests.** Backend tests block outbound sockets; use `ScriptedVision`/`httpx.MockTransport`. Live checks go in `tests/test_live.py` behind `GEM_LIVE_TESTS=1`.
 - **Gem's context is RAM-only.** Frames, transcripts, drawn images and audio live in `SessionStore` and are purged after 10 idle minutes. Don't persist them without an explicit decision.
-- **Mic is muted while Gem thinks or speaks** (`isMicMuted`). Keep it that way unless echo cancellation is added.
+- **The mic stream is started once and never stopped** while the app is open (a stopped `AudioStream` may not restart). Mute by ignoring buffers (`isMicMuted`: only while thinking). While Gem speaks the VAD is in barge-in/echo mode; keep the server echo check (`assistant/echo.py`).
+- **No frames while the answer screen is up** (`shouldStreamFrames`); they resume on Dismiss.
 - **Gemini never draws pixels.** It returns boxes; `app/assistant/render.py` draws them. Parse its JSON strictly (`brain.parse_reply`).
 - **Only `app/ingest.py::ingest` writes `clinical_events`** (legacy gateway path).
 - **`app/gateway.py` stays pure**: no I/O, no AI, no clock. Anything it decides must be unit-tested in `tests/test_gateway.py`.

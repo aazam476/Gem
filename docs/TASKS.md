@@ -59,6 +59,7 @@ needs a human (see HUMAN_TESTS.md).
 - [x] Gem system prompt + JSON schema + strict parsing; boxes drawn server-side; mock brain
 - [x] App: permission gate, full-screen camera, 1 fps frames, AudioStream + VAD, answer overlay, replay/dismiss, typed fallback, session recovery
 - [x] Visual memory (5 min of changed frames, all sent per question, answer drawn on the chosen earlier frame)
+- [x] Barge-in on the answer screen, frames paused while it is up, continuous mic stream, typed box removed
 - [x] Tests: backend 43 new; mobile VAD/WAV/state/audio-cache/hook/contract tests; web run with fake camera
 - [ ] 👤 Phone run: HUMAN_TESTS §2–§4 (mic + VAD + ElevenLabs + real Gemini are untested by the agent)
 - **Check:** `./scripts/check.sh`

@@ -170,7 +170,11 @@ scene hadn't changed since the last kept frame (one is still kept every 30 s).
 ### `POST /sessions/{id}/turns` → 200 `Turn`
 Exactly one of:
 - `{"audio_base64": "<wav>", "audio_mime": "audio/wav"}` — the user's utterance (16 kHz mono PCM WAV from the app; `audio/mp3|mpeg|aac|ogg|flac|mp4` also accepted)
-- `{"text": "Where is the start button?"}` — typed question
+- `{"text": "Where is the start button?"}` — text question (tests/tools; the app no longer has a text box)
+
+Optional `"interrupted": true` — the user started talking while Gem was still answering;
+Gemini is told so it treats the question as a correction. A turn whose transcript is
+mostly Gem's own last answer (its voice picked up by the mic) returns `status: "ignored"`.
 
 Counts as activity. **All remembered frames** (oldest first, labelled with id and age), the history and the input go to Gemini.
 ```json

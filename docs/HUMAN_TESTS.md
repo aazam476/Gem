@@ -2,8 +2,8 @@
 
 Things an agent cannot verify in a container: a real phone, camera, microphone, speaker,
 live API keys, and Gemini's accuracy on real scenes. (The web build was driven in headless
-Chromium with a fake camera: frames, typed questions, answer overlay, replay and dismiss
-work; live mic streaming is native-only and untested by the agent.) Run these once per phase; record results in the
+Chromium with a fake camera earlier; the typed-question box has since been removed, so the
+answer flow, barge-in and the mic can only be tested on a phone.) Run these once per phase; record results in the
 table at the bottom.
 
 ## 0. One-time setup (only you can do this)
@@ -47,16 +47,17 @@ cd mobile && npx expo start          # w = portal in browser; scan QR in Expo Go
 | 2.3 | iOS: deny again until "Open Settings" appears (or deny in Settings). Tap it, enable the mic, return to the app. | Settings opens; on return the app goes straight to the camera (no restart). |
 | 2.4 | With both granted. | Full-screen back camera; status "Listening — ask me anything"; "Mic on"; "Frames sent" counts up ~1 per second. |
 | 2.5 | Point at the BP monitor, say "What does my blood pressure say?" and stop talking. | "Hearing you…" while talking; ~1 s after you stop: "Thinking…"; then the overlay with **your photo with a yellow box** on the display, the answer in the text box, and an **ElevenLabs voice** reading it. Note time from end of speech to voice. |
-| 2.6 | While Gem is speaking, keep quiet. | Gem does **not** answer itself; status shows "Mic off" while it talks and "Mic on" again right after. |
+| 2.6 | While Gem is speaking, keep quiet (phone volume at your normal level). | Gem finishes its answer and does **not** cut itself off or answer itself. If it cuts itself off, note the volume; raise `bargeInMarginDb` in `src/logic/vad.ts`. |
+| 2.6c | **Interrupt:** ask "Where is the yellow chair?" with two yellow chairs in view; while Gem is still talking, say "Wait, no, the other chair." | Gem stops talking within ~0.5 s of you starting; "Hearing you…" on the answer screen; the new answer boxes the **other** chair. If it doesn't react, note the volume; lower `bargeInMarginDb`. |
+| 2.6d | On the answer screen (Gem finished), ask a follow-up without tapping anything. | Answered; the new answer replaces the old one. "Frames sent" did **not** increase while the answer screen was up. |
 | 2.6b | If you hear nothing: watch the `npx expo start` terminal for `[gem-audio]` lines. | Expected sequence: `downloaded <turn> <bytes>` → `playing <turn>` → `finished <turn>`. `download failed` / `player never started` mean it fell back to the phone voice; report the line. |
 | 2.7 | Tap "Read it again" twice. | Same voice plays again immediately. Backend log shows only one ElevenLabs request for that answer (second GET returns `X-Gem-Audio-Cache: hit` if a new player was needed). |
-| 2.8 | Tap "Dismiss". | Overlay closes, camera visible, still listening. |
+| 2.8 | Tap "Dismiss", then ask another question. | Overlay closes, "Frames sent" starts increasing again, "Mic on", and the new question is answered (repeat 3–4 cycles). |
 | 2.9 | Ask a follow-up that depends on context: "Which button starts it?" | Answer refers to the same device; the start button is marked. |
 | 2.9b | **Visual memory:** point at a backpack (or any distinct object) for 2–3 s, then point the camera elsewhere and move around for ~1 minute. Ask "Where did I leave my backpack?" | The answer image is the **earlier** frame with the backpack boxed, labelled "Seen about 60 seconds ago"; the spoken answer says roughly when/where. Note latency vs. 2.5. |
 | 2.9c | Same, but wait > 5 minutes before asking. | Gem says it doesn't remember / can't see it (memory window is 5 min). |
 | 2.10 | Have someone talk nearby / play a TV, without addressing Gem. | Mostly nothing happens or "I didn't catch that." — no spoken answer. |
 | 2.11 | Quiet room vs. noisy room (fan, kitchen). Ask a question in each. | End of speech is detected in both; no endless "Hearing you…". If it triggers on noise or cuts you off, note the room and phone model (tune `src/logic/vad.ts` thresholds). |
-| 2.12 | Type "Where is the start button?" in the text box and Send. | Same answer flow without speaking. |
 | 2.13 | iPhone ringer switch on silent; ask a question. | Voice still audible through the speaker (not the earpiece). |
 | 2.14 | Background the app for a few seconds, come back, ask again. | Frames and mic resume; answer works. |
 
@@ -68,7 +69,7 @@ cd mobile && npx expo start          # w = portal in browser; scan QR in Expo Go
 | 3.2 | Backend with `ELEVENLABS_API_KEY=` (empty), ask a question. | Answer read with the phone's built-in voice, no long silence. |
 | 3.3 | Backend with `GEM_SESSION_IDLE_TIMEOUT_S=60`, put the phone face down (frames keep coming → not idle). Then lock the phone for 90 s, unlock, ask a question. | The question still works (the app opens a new session silently after the 410). |
 | 3.4 | Cover the lens and ask "What do you see?" | Gem says it can't see / it's too dark; no misleading markings. |
-| 3.5 | Offline demo: `GEM_MOCK_AI=1`, no keys. | Typed and spoken questions get the mock answer with a box in the middle and on-device voice. |
+| 3.5 | Offline demo: `GEM_MOCK_AI=1`, no keys. | Spoken questions get the mock answer with a box in the middle and on-device voice. |
 
 ## 4. Accuracy sample
 
@@ -78,7 +79,7 @@ answers, boxes on target, no invented readings.
 
 ## 5. UI smoke (after the restyle)
 
-Run 2.1, 2.4, 2.5, 2.7, 2.8, 2.12 and 3.1 again, then `cd mobile && npm test`. Check text
+Run 2.1, 2.4, 2.5, 2.6c, 2.7, 2.8 and 3.1 again, then `cd mobile && npm test`. Check text
 ≥ 20 px, large buttons, and the answer image shows the markings uncropped.
 
 ## 6. Optional

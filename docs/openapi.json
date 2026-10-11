@@ -907,7 +907,7 @@
           "assistant"
         ],
         "summary": "Turn Speech",
-        "description": "ElevenLabs audio for an answer. Synthesized at most once per turn: the first\nrequest streams it through while caching it in RAM; later requests (replays)\nare served from the cache with no ElevenLabs call.",
+        "description": "ElevenLabs MP3 for an answer, synthesized at most once per turn and kept in RAM.\n\nReturned whole with a Content-Length (not chunked): iOS's player is unreliable with\nlength-less streams, and the phone downloads the file before playing it anyway.\nConcurrent first requests wait for the same synthesis.",
         "operationId": "turn_speech_sessions__session_id__turns__turn_id__speech_get",
         "parameters": [
           {
@@ -1720,6 +1720,12 @@
               }
             ],
             "title": "Text"
+          },
+          "interrupted": {
+            "type": "boolean",
+            "title": "Interrupted",
+            "description": "The user started talking while Gem was answering",
+            "default": false
           }
         },
         "additionalProperties": false,

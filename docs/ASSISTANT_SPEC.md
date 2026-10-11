@@ -97,15 +97,41 @@ playback finished (or watchdog) → audio session → record, mic stream restart
 10 min with no frame and no prompt → session purged; next call gets 410 → app opens a new session
 ```
 
-The mic is **stopped while Gem is thinking or speaking**, so Gem never answers itself, a
-second question can't be queued, and iOS leaves its record+play route (which can send
-output to the quiet earpiece) before Gem talks. A watchdog (estimated duration + a few
-seconds) restarts the mic if a "finished" event is ever lost.
+### Answer screen, interruptions and the listening cycle
+
+```
+camera + frames ──(you stop talking)──▶ thinking (mic ignored) ──▶ answer screen
+       ▲                                                            │  frames PAUSED, mic LIVE
+       │                                                            │  Gem speaking → barge-in mode
+       └──────────────────────── Dismiss ◀──────────────────────────┤
+                                                                     └─ you talk → Gem stops, new question
+                                                                        (interrupted=true) → new answer screen
+```
+
+- The native mic stream is started **once** and never stopped while the app is open (a
+  stopped `AudioStream` releases its resources and may not restart — this caused "no
+  listening after Dismiss"). Buffers are ignored only while a question is being answered
+  (`thinking`). A stall watchdog restarts the stream if no buffers arrive for 4 s.
+- While the answer screen is up, **no frames are added** to Gem's memory, so a follow-up
+  refers to what you were looking at. Dismiss resumes 1 fps capture.
+- **Barge-in:** while Gem speaks, the VAD runs in echo mode: it measures Gem's own voice
+  through the mic for 0.4 s, then only speech ≥ 10 dB louder than that echo for 250 ms counts.
+  On speech start Gem stops talking immediately; the utterance is sent with
+  `interrupted: true`, and Gemini is told it was interrupted.
+- **Echo safety net:** if Gem's voice still gets through, the server ignores a turn whose
+  transcript is ≥ 70 % words from Gem's last answer (`assistant/echo.py`), and the prompt
+  tells Gemini to set `is_request=false` for its own voice.
+- **"No, the other chair":** history records exactly what was marked and where
+  (`Marked on frame 12: yellow chair at [100, 100, 400, 300]`), and the prompt tells Gem to
+  pick a *different* object/frame when corrected.
+- Audio session: "play and record" routed to the **loudspeaker** for the whole session.
+  The phone has no app-controlled echo cancellation, so barge-in sensitivity depends on
+  speaker volume and room; tune `bargeInMarginDb` in `src/logic/vad.ts` (HUMAN_TESTS 2.6).
 
 ## 4. Speech-to-text
 
 - Capture: `expo-audio`'s `useAudioStream` (real-time PCM; available in Expo Go SDK 57,
-  native only — on web the preview shows a typed-question box instead).
+  native only — the web preview shows a mic error; questions are asked on the phone).
 - End of speech: on-device energy VAD (`src/logic/vad.ts`): 0.5 s room calibration,
   adaptive noise floor, speech = 15 dB over the floor for 150 ms, end = 1 s below
   floor + 8 dB, 300 ms pre-roll, utterances < 350 ms of speech discarded, 30 s cap; a forced
